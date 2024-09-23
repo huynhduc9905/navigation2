@@ -39,7 +39,9 @@ from launch_ros.actions import Node
 def generate_launch_description():
     # Get the launch directory
     bringup_dir = get_package_share_directory('nav2_bringup')
+    costmap_filter_dir = get_package_share_directory('nav2_costmap_filters_demo')
     launch_dir = os.path.join(bringup_dir, 'launch')
+    cosmap_filter_launch_dir = os.path.join(costmap_filter_dir, 'launch')
     # This checks that tb4 exists needed for the URDF / simulation files.
     # If not using TB4, its safe to remove.
     sim_dir = get_package_share_directory('nav2_minimal_tb4_sim')
@@ -208,6 +210,14 @@ def generate_launch_description():
         }.items(),
     )
 
+    map_mask_cmd = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource(os.path.join(cosmap_filter_launch_dir, 'costmap_filter_info.launch.py')),
+        launch_arguments={
+            'params_file': '/home/hoc3hc/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/params/keepout_params.yaml',
+            'mask': '/home/hoc3hc/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/maps/keepout_mask.yaml',
+        }.items(),
+    )
+
     # The SDF file for the world is a xacro file because we wanted to
     # conditionally load the SceneBroadcaster plugin based on wheter we're
     # running in headless mode. But currently, the Gazebo command line doesn't
@@ -290,5 +300,6 @@ def generate_launch_description():
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(bringup_cmd)
+    ld.add_action(map_mask_cmd)
 
     return ld
