@@ -92,9 +92,6 @@ void SpeedFilter::initializeFilter(
     "/is_slope", rclcpp::QoS(10));
   cak_pub_->on_activate();
 
-  clear_costmap_client_ = node->create_client<nav2_msgs::srv::ClearEntireCostmap>("/global_costmap/clear_entirely_global_costmap");
-  clear_local_costmap_client_ = node->create_client<nav2_msgs::srv::ClearEntireCostmap>("/local_costmap/clear_entirely_local_costmap");
-
   // Reset speed conversion states
   base_ = BASE_DEFAULT;
   multiplier_ = MULTIPLIER_DEFAULT;
