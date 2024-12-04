@@ -45,6 +45,7 @@
 
 #include "nav2_msgs/msg/costmap_filter_info.hpp"
 #include "nav2_msgs/msg/speed_limit.hpp"
+#include "std_msgs/msg/bool.hpp"
 
 namespace nav2_costmap_2d
 {
@@ -100,6 +101,7 @@ private:
   rclcpp::Subscription<nav_msgs::msg::OccupancyGrid>::SharedPtr mask_sub_;
 
   rclcpp_lifecycle::LifecyclePublisher<nav2_msgs::msg::SpeedLimit>::SharedPtr speed_limit_pub_;
+  rclcpp_lifecycle::LifecyclePublisher<std_msgs::msg::Bool>::SharedPtr cak_pub_;
 
   nav_msgs::msg::OccupancyGrid::SharedPtr filter_mask_;
 
@@ -108,8 +110,9 @@ private:
   double base_, multiplier_;
   bool percentage_;
   double speed_limit_, speed_limit_prev_;
+  bool is_in_range;
+  bool is_in_range_pre;
 };
-
 }  // namespace nav2_costmap_2d
 
 #endif  // NAV2_COSTMAP_2D__COSTMAP_FILTERS__SPEED_FILTER_HPP_

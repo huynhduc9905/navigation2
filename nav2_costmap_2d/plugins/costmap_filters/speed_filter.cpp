@@ -49,8 +49,8 @@ namespace nav2_costmap_2d
 
 SpeedFilter::SpeedFilter()
 : filter_info_sub_(nullptr), mask_sub_(nullptr),
-  speed_limit_pub_(nullptr), filter_mask_(nullptr), global_frame_(""),
-  speed_limit_(NO_SPEED_LIMIT), speed_limit_prev_(NO_SPEED_LIMIT)
+  speed_limit_pub_(nullptr),cak_pub_(nullptr) , filter_mask_(nullptr), global_frame_(""),
+  speed_limit_(NO_SPEED_LIMIT), speed_limit_prev_(NO_SPEED_LIMIT), is_in_range(false), is_in_range_pre(false)
 {
 }
 
@@ -86,6 +86,14 @@ void SpeedFilter::initializeFilter(
   speed_limit_pub_ = node->create_publisher<nav2_msgs::msg::SpeedLimit>(
     speed_limit_topic, rclcpp::QoS(10));
   speed_limit_pub_->on_activate();
+
+  // Create new publisher for /cak topic
+  cak_pub_ = node->create_publisher<std_msgs::msg::Bool>(
+    "/is_slope", rclcpp::QoS(10));
+  cak_pub_->on_activate();
+
+  clear_costmap_client_ = node->create_client<nav2_msgs::srv::ClearEntireCostmap>("/global_costmap/clear_entirely_global_costmap");
+  clear_local_costmap_client_ = node->create_client<nav2_msgs::srv::ClearEntireCostmap>("/local_costmap/clear_entirely_local_costmap");
 
   // Reset speed conversion states
   base_ = BASE_DEFAULT;
@@ -206,6 +214,7 @@ void SpeedFilter::process(
     // Corresponding filter mask cell is free.
     // Setting no speed limit there.
     speed_limit_ = NO_SPEED_LIMIT;
+    is_in_range = false;
   } else if (speed_mask_data == SPEED_MASK_UNKNOWN) {
     // Corresponding filter mask cell is unknown.
     // Do nothing.
@@ -217,7 +226,9 @@ void SpeedFilter::process(
     return;
   } else {
     // Normal case: speed_mask_data in range of [1..100]
+    is_in_range = true;
     speed_limit_ = speed_mask_data * multiplier_ + base_;
+
     if (percentage_) {
       if (speed_limit_ < 0.0 || speed_limit_ > 100.0) {
         RCLCPP_WARN(
@@ -238,6 +249,14 @@ void SpeedFilter::process(
       }
     }
   }
+  
+  if (is_in_range != is_in_range_pre){
+    is_in_range_pre = is_in_range;
+    auto message = std_msgs::msg::Bool();
+    message.data = is_in_range;
+
+    cak_pub_->publish(message);
+  }
 
   if (speed_limit_ != speed_limit_prev_) {
     if (speed_limit_ != NO_SPEED_LIMIT) {
@@ -253,7 +272,7 @@ void SpeedFilter::process(
     msg->header.stamp = clock_->now();
     msg->percentage = percentage_;
     msg->speed_limit = speed_limit_;
-    speed_limit_pub_->publish(std::move(msg));
+    // speed_limit_pub_->publish(std::move(msg));
 
     speed_limit_prev_ = speed_limit_;
   }
@@ -268,6 +287,10 @@ void SpeedFilter::resetFilter()
   if (speed_limit_pub_) {
     speed_limit_pub_->on_deactivate();
     speed_limit_pub_.reset();
+  }
+  if (cak_pub_) {
+    cak_pub_->on_deactivate();
+    cak_pub_.reset();
   }
 }
 
