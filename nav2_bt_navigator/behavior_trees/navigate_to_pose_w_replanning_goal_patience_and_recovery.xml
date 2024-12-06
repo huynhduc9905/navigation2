@@ -18,7 +18,7 @@
           </RecoveryNode>
         </RateController>
         <ReactiveSequence name="MonitorAndFollowPath">
-          <PathLongerOnApproach path="{path}" prox_len="20" length_factor="1.01">
+          <PathLongerOnApproach path="{path}" prox_len="20" length_factor="1.3">
             <RetryUntilSuccessful num_attempts="1">
               <SequenceWithMemory name="CancelingControlAndWait">
                 <CancelControl name="ControlCancel"/>
