@@ -1,0 +1,4 @@
+[submodule "imu_tools"]
+        path = nav2_minimal_turtlebot_simulation
+        url = git@github.com:huynhduc9905/nav2_minimal_turtlebot_simulation.git
+        branch = main
