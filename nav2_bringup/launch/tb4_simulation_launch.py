@@ -210,13 +210,13 @@ def generate_launch_description():
         }.items(),
     )
 
-    map_mask_cmd = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource(os.path.join(cosmap_filter_launch_dir, 'costmap_filter_info.launch.py')),
-        launch_arguments={
-            'params_file': '/home/hoc3hc/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/params/keepout_params.yaml',
-            'mask': '/home/hoc3hc/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/maps/keepout_mask.yaml',
-        }.items(),
-    )
+    # map_mask_cmd = IncludeLaunchDescription(
+    #     PythonLaunchDescriptionSource(os.path.join(cosmap_filter_launch_dir, 'costmap_filter_info.launch.py')),
+    #     launch_arguments={
+    #         'params_file': '/home/server/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/params/keepout_params.yaml',
+    #         'mask': '/home/hoc3hc/nav2_ws/src/navigation2/navigation2_tutorials/nav2_costmap_filters_demo/maps/keepout_mask.yaml',
+    #     }.items(),
+    # )
 
     # The SDF file for the world is a xacro file because we wanted to
     # conditionally load the SceneBroadcaster plugin based on wheter we're
@@ -300,6 +300,6 @@ def generate_launch_description():
     ld.add_action(start_robot_state_publisher_cmd)
     ld.add_action(rviz_cmd)
     ld.add_action(bringup_cmd)
-    ld.add_action(map_mask_cmd)
+    #ld.add_action(map_mask_cmd)
 
     return ld
