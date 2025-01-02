@@ -1,4 +1,4 @@
 [submodule "nav2_minimal_turtlebot_simulation"]
         path = nav2_minimal_turtlebot_simulation
         url = git@github.com:huynhduc9905/nav2_minimal_turtlebot_simulation.git
-        branch = main
+        branch = nav2_taste_simulation
