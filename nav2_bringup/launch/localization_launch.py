@@ -132,7 +132,10 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
+                #remappings=remappings,
+                remappings=[
+                    ('/map', '/map_navi'),  # Remap /map to /new_map
+                ]
             ),
             Node(
                 condition=IfCondition(
@@ -146,7 +149,10 @@ def generate_launch_description():
                 respawn_delay=2.0,
                 parameters=[configured_params, {'yaml_filename': map_yaml_file}],
                 arguments=['--ros-args', '--log-level', log_level],
-                remappings=remappings,
+                #remappings=remappings,
+                remappings=[
+                    ('/map', '/map_navi'),  # Remap /map to /new_map
+                ]
             ),
             Node(
                 package='nav2_amcl',
@@ -189,7 +195,10 @@ def generate_launch_description():
                         plugin='nav2_map_server::MapServer',
                         name='map_server',
                         parameters=[configured_params],
-                        remappings=remappings,
+                        #remappings=remappings,
+                        remappings=[
+                            ('/map', '/map_navi'),  # Remap /map to /new_map
+                        ]
                     ),
                 ],
             ),
@@ -207,7 +216,10 @@ def generate_launch_description():
                             configured_params,
                             {'yaml_filename': map_yaml_file},
                         ],
-                        remappings=remappings,
+                        #remappings=remappings,
+                        remappings=[
+                            ('/map', '/map_navi'),  # Remap /map to /new_map
+                        ]
                     ),
                 ],
             ),
