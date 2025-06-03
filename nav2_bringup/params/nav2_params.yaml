@@ -115,7 +115,11 @@ controller_server:
       transform_tolerance: 0.1
       temperature: 0.3
       gamma: 0.015
-      motion_model: "DiffDrive"
+      motion_model: AdaptiveDiffDrive
+      AdaptiveConstraints:
+        smoothing_alpha: 0.2
+        min_tau: 0.01
+        max_tau: 0.5
       visualize: true
       regenerate_noises: true
       TrajectoryVisualizer:

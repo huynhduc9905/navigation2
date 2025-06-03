@@ -57,6 +57,18 @@ void ConstraintCritic::score(CriticData & data)
     return;
   }
 
+  auto adapt = dynamic_cast<AdaptiveMotionModel *>(data.motion_model.get());
+  if (adapt != nullptr) {
+    if (power_ > 1u) {
+      data.costs += (((((data.state.vx - max_vel_).max(0.0f) + (min_vel_ - data.state.vx).
+        max(0.0f)) * data.model_dt).rowwise().sum().eval()) * weight_).pow(power_).eval();
+    } else {
+      data.costs += (((((data.state.vx - max_vel_).max(0.0f) + (min_vel_ - data.state.vx).
+        max(0.0f)) * data.model_dt).rowwise().sum().eval()) * weight_).eval();
+    }
+    return;
+  }
+
   // Omnidirectional motion model
   auto omni = dynamic_cast<OmniMotionModel *>(data.motion_model.get());
   if (omni != nullptr) {

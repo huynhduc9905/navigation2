@@ -27,7 +27,7 @@
 
 namespace mppi
 {
-
+geometry_msgs::msg::Twist last_cmd_vel_;
 void Optimizer::initialize(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
@@ -137,6 +137,9 @@ void Optimizer::reset()
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
 
   noise_generator_.reset(settings_, isHolonomic());
+  last_cmd_vel_.linear.x = 0.0;
+  last_cmd_vel_.linear.y = 0.0;
+  last_cmd_vel_.angular.z = 0.0;
   RCLCPP_INFO(logger_, "Optimizer reset");
 }
 
@@ -160,6 +163,14 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
 
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
+
+  // Plot taux just for debug
+  auto adaptive_model = std::dynamic_pointer_cast<AdaptiveMotionModel>(motion_model_);
+  if (adaptive_model) {
+      control.twist.linear.y = adaptive_model->getTauVx();
+  }
+
+  last_cmd_vel_ = control.twist;
 
   if (settings_.shift_control_sequence) {
     shiftControlSequence();
@@ -208,6 +219,11 @@ void Optimizer::prepare(
   path_ = utils::toTensor(plan);
   costs_.setZero();
   goal_ = goal;
+
+  auto adaptive_model = std::dynamic_pointer_cast<AdaptiveMotionModel>(motion_model_);
+  if (adaptive_model) {
+      adaptive_model->updateTau(robot_speed, last_cmd_vel_, settings_.model_dt);
+  }
 
   critics_data_.fail_flag = false;
   critics_data_.goal_checker = goal_checker;
@@ -461,6 +477,8 @@ void Optimizer::setMotionModel(const std::string & model)
     motion_model_ = std::make_shared<OmniMotionModel>();
   } else if (model == "Ackermann") {
     motion_model_ = std::make_shared<AckermannMotionModel>(parameters_handler_, name_);
+  } else if (model == "AdaptiveDiffDrive") {
+      motion_model_ = std::make_shared<AdaptiveMotionModel>(false, parameters_handler_, name_);
   } else {
     throw nav2_core::ControllerException(
             std::string(
