@@ -149,7 +149,7 @@ void Optimizer::reset()
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
 
   noise_generator_.reset(settings_, isHolonomic());
-  last_cmd_vel_ = Twist()
+  last_cmd_vel_ = geometry_msgs::msg::Twist();
 
   RCLCPP_INFO(logger_, "Optimizer reset");
 }

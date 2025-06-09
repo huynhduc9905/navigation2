@@ -69,9 +69,9 @@ public:
     smoothing_alpha_ = smoothing_alpha;
     min_tau_ = min_tau;
     max_tau_ = max_tau;
-    tau_vx_ = 0.05f;
-    tau_vy_ = 0.05f;
-    tau_wz_ = 0.05f;
+    tau_vx_ = 1e-6f;
+    tau_vy_ = 1e-6f;
+    tau_wz_ = 1e-6f;
     last_vx_ = 0.0f;
     last_vy_ = 0.0f;
     last_wz_ = 0.0f;
@@ -205,9 +205,9 @@ protected:
   float smoothing_alpha_{0.2f};
   float min_tau_{0.01f};
   float max_tau_{0.5f};
-  float tau_vx_{0.05f};
-  float tau_vy_{0.05f};
-  float tau_wz_{0.05f};
+  float tau_vx_{1e-6f};
+  float tau_vy_{1e-6f};
+  float tau_wz_{1e-6f};
   float last_vx_{0.0f};
   float last_vy_{0.0f};
   float last_wz_{0.0f};
