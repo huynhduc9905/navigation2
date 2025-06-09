@@ -16,6 +16,7 @@
 #define NAV2_MPPI_CONTROLLER__MOTION_MODELS_HPP_
 
 #include <Eigen/Dense>
+#include <geometry_msgs/msg/twist.hpp>
 
 #include <cstdint>
 #include <string>
@@ -54,15 +55,73 @@ public:
     */
   virtual ~MotionModel() = default;
 
-  /**
+    /**
     * @brief Initialize motion model on bringup and set required variables
     * @param control_constraints Constraints on control
     * @param model_dt duration of a time step
     */
-  void initialize(const models::ControlConstraints & control_constraints, float model_dt)
+  void initialize(const models::ControlConstraints & control_constraints, float model_dt,
+                  bool use_adaptive_lag, float smoothing_alpha, float min_tau, float max_tau)
   {
     control_constraints_ = control_constraints;
     model_dt_ = model_dt;
+    use_adaptive_lag_ = use_adaptive_lag;
+    smoothing_alpha_ = smoothing_alpha;
+    min_tau_ = min_tau;
+    max_tau_ = max_tau;
+    tau_vx_ = 0.05f;
+    tau_vy_ = 0.05f;
+    tau_wz_ = 0.05f;
+    last_vx_ = 0.0f;
+    last_vy_ = 0.0f;
+    last_wz_ = 0.0f;
+  }
+
+  void updateTau(
+    const geometry_msgs::msg::Twist & actual_speed,
+    const geometry_msgs::msg::Twist & cmd_speed,
+    float dt)
+  {
+    if (!use_adaptive_lag_) {
+      return;
+    }
+
+    const float epsilon = 1e-6f; // Avoid division by zero
+
+    // Estimate tau for vx
+    float vx_actual = actual_speed.linear.x;
+    float vx_cmd = cmd_speed.linear.x;
+    float vx_diff = vx_actual - last_vx_;
+    if (std::abs(vx_diff) > epsilon && std::abs(vx_cmd - last_vx_) > epsilon) {
+      float tau_est = dt * (vx_cmd - last_vx_) / vx_diff;
+      tau_vx_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) +
+                (1.0f - smoothing_alpha_) * tau_vx_;
+    }
+    last_vx_ = vx_actual;
+
+    // Estimate tau for wz
+    float wz_actual = actual_speed.angular.z;
+    float wz_cmd = cmd_speed.angular.z;
+    float wz_diff = wz_actual - last_wz_;
+    if (std::abs(wz_diff) > epsilon && std::abs(wz_cmd - last_wz_) > epsilon) {
+      float tau_est = dt * (wz_cmd - last_wz_) / wz_diff;
+      tau_wz_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) +
+                (1.0f - smoothing_alpha_) * tau_wz_;
+    }
+    last_wz_ = wz_actual;
+
+    // Estimate tau for vy (if holonomic)
+    if (isHolonomic()) {
+      float vy_actual = actual_speed.linear.y;
+      float vy_cmd = cmd_speed.linear.y;
+      float vy_diff = vy_actual - last_vy_;
+      if (std::abs(vy_diff) > epsilon && std::abs(vy_cmd - last_vy_) > epsilon) {
+        float tau_est = dt * (vy_cmd - last_vy_) / vy_diff;
+        tau_vy_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) +
+                  (1.0f - smoothing_alpha_) * tau_vy_;
+      }
+      last_vy_ = vy_actual;
+    }
   }
 
   /**
@@ -85,24 +144,47 @@ public:
     for (unsigned int i = 1; i != n_cols; i++) {
       for (unsigned int j = 0; j != n_rows; j++) {
         float vx_last = state.vx(j, i - 1);
-        float & cvx_curr = state.cvx(j, i - 1);
-        cvx_curr = utils::clamp(vx_last + min_delta_vx, vx_last + max_delta_vx, cvx_curr);
-        state.vx(j, i) = cvx_curr;
+        float & cvx_cmd = state.cvx(j, i - 1);
+        float min_vx_acc = vx_last + min_delta_vx;
+        float max_vx_acc = vx_last + max_delta_vx;
+        float cvx_feasible = utils::clamp(min_vx_acc, max_vx_acc, cvx_cmd);
+
+        float vx_new = use_adaptive_lag_ ?
+          vx_last + model_dt_ * (cvx_feasible - vx_last) / tau_vx_ :
+          cvx_feasible;
+        state.vx(j, i) = utils::clamp(control_constraints_.vx_min, control_constraints_.vx_max, vx_new);
 
         float wz_last = state.wz(j, i - 1);
-        float & cwz_curr = state.cwz(j, i - 1);
-        cwz_curr = utils::clamp(wz_last - max_delta_wz, wz_last + max_delta_wz, cwz_curr);
-        state.wz(j, i) = cwz_curr;
+        float & cwz_cmd = state.cwz(j, i - 1);
+        float min_wz_acc = wz_last - max_delta_wz;
+        float max_wz_acc = wz_last + max_delta_wz;
+        float cwz_feasible = utils::clamp(min_wz_acc, max_wz_acc, cwz_cmd);
+
+        float wz_new = use_adaptive_lag_ ?
+          wz_last + model_dt_ * (cwz_feasible - wz_last) / tau_wz_ :
+          cwz_feasible;
+        state.wz(j, i) = utils::clamp(-control_constraints_.wz, control_constraints_.wz, wz_new);
 
         if (is_holo) {
           float vy_last = state.vy(j, i - 1);
-          float & cvy_curr = state.cvy(j, i - 1);
-          cvy_curr = utils::clamp(vy_last - max_delta_vy, vy_last + max_delta_vy, cvy_curr);
-          state.vy(j, i) = cvy_curr;
+          float & cvy_cmd = state.cvy(j, i - 1);
+          float min_vy_acc = vy_last - max_delta_vy;
+          float max_vy_acc = vy_last + max_delta_vy;
+          float cvy_feasible = utils::clamp(min_vy_acc, max_vy_acc, cvy_cmd);
+
+          float vy_new = use_adaptive_lag_ ?
+            vy_last + model_dt_ * (cvy_feasible - vy_last) / tau_vy_ :
+            cvy_feasible;
+          state.vy(j, i) = utils::clamp(-control_constraints_.vy, control_constraints_.vy, vy_new);
         }
       }
     }
   }
+
+  // Getter methods for tau values
+  float getTauVx() const { return tau_vx_; }
+  float getTauVy() const { return tau_vy_; }
+  float getTauWz() const { return tau_wz_; }
 
   /**
    * @brief Whether the motion model is holonomic, using Y axis
@@ -118,8 +200,17 @@ public:
 
 protected:
   float model_dt_{0.0};
-  models::ControlConstraints control_constraints_{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f,
-    0.0f};
+  models::ControlConstraints control_constraints_{0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f};
+  bool use_adaptive_lag_{false};
+  float smoothing_alpha_{0.2f};
+  float min_tau_{0.01f};
+  float max_tau_{0.5f};
+  float tau_vx_{0.05f};
+  float tau_vy_{0.05f};
+  float tau_wz_{0.05f};
+  float last_vx_{0.0f};
+  float last_vy_{0.0f};
+  float last_wz_{0.0f};
 };
 
 /**
@@ -215,115 +306,6 @@ public:
   {
     return true;
   }
-};
-
-class AdaptiveMotionModel : public MotionModel
-{
-public:
-  explicit AdaptiveMotionModel(bool is_holonomic, ParametersHandler * param_handler, const std::string & name)
-    : is_holonomic_(is_holonomic)
-  {
-    auto getParam = param_handler->getParamGetter(name + ".AdaptiveConstraints");
-    getParam(smoothing_alpha_, "smoothing_alpha", 0.2f);
-    getParam(min_tau_, "min_tau", 0.01f);
-    getParam(max_tau_, "max_tau", 0.5f);
-  }
-
-  bool isHolonomic() override { return is_holonomic_; }
-
-  void updateTau(
-    const geometry_msgs::msg::Twist & actual_speed,
-    const geometry_msgs::msg::Twist & cmd_speed,
-    float dt)
-  {
-      const float epsilon = 1e-6f;
-
-      float vx_actual = actual_speed.linear.x;
-      float vx_cmd = cmd_speed.linear.x;
-      float vx_diff = vx_actual - last_vx_;
-      if (std::abs(vx_diff) > epsilon && std::abs(vx_cmd - last_vx_) > epsilon) {
-        float tau_est = dt * (vx_cmd - last_vx_) / vx_diff;
-        tau_vx_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) + (1.0f - smoothing_alpha_) * tau_vx_;
-      }
-      last_vx_ = vx_actual;
-
-      float wz_actual = actual_speed.angular.z;
-      float wz_cmd = cmd_speed.angular.z;
-      float wz_diff = wz_actual - last_wz_;
-      if (std::abs(wz_diff) > epsilon && std::abs(wz_cmd - last_wz_) > epsilon) {
-        float tau_est = dt * (wz_cmd - last_wz_) / wz_diff;
-        tau_wz_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) + (1.0f - smoothing_alpha_) * tau_wz_;
-      }
-      last_wz_ = wz_actual;
-
-      if (is_holonomic_) {
-        float vy_actual = actual_speed.linear.y;
-        float vy_cmd = cmd_speed.linear.y;
-        float vy_diff = vy_actual - last_vy_;
-        if (std::abs(vy_diff) > epsilon && std::abs(vy_cmd - last_vy_) > epsilon) {
-          float tau_est = dt * (vy_cmd - last_vy_) / vy_diff;
-          tau_vy_ = smoothing_alpha_ * std::clamp(tau_est, min_tau_, max_tau_) + (1.0f - smoothing_alpha_) * tau_vy_;
-        }
-        last_vy_ = vy_actual;
-      }
-    }
-
-    void predict(models::State & state) override
-    {
-      const bool is_holo = isHolonomic();
-      float max_delta_vx = model_dt_ * control_constraints_.ax_max;
-      float min_delta_vx = model_dt_ * control_constraints_.ax_min;
-      float max_delta_vy = model_dt_ * control_constraints_.ay_max;
-      float max_delta_wz = model_dt_ * control_constraints_.az_max;
-
-      unsigned int n_rows = state.vx.rows();
-      unsigned int n_cols = state.vx.cols();
-
-      for (unsigned int i = 1; i != n_cols; i++) {
-        for (unsigned int j = 0; j != n_rows; j++) {
-          float vx_last = state.vx(j, i - 1);
-          float cvx_cmd = state.cvx(j, i - 1);
-          float min_vx_acc = vx_last + min_delta_vx;
-          float max_vx_acc = vx_last + max_delta_vx;
-          float cvx_feasible = utils::clamp(min_vx_acc, max_vx_acc, cvx_cmd);
-
-          float vx_new = vx_last + model_dt_ * (cvx_feasible - vx_last) / tau_vx_;
-          state.vx(j, i) = utils::clamp(control_constraints_.vx_min, control_constraints_.vx_max, vx_new);
-
-          float wz_last = state.wz(j, i - 1);
-          float cwz_cmd = state.cwz(j, i - 1);
-          float min_wz_acc = wz_last - max_delta_wz;
-          float max_wz_acc = wz_last + max_delta_wz;
-          float cwz_feasible = utils::clamp(min_wz_acc, max_wz_acc, cwz_cmd);
-
-          float wz_new = wz_last + model_dt_ * (cwz_feasible - wz_last) / tau_wz_;
-          state.wz(j, i) = utils::clamp(-control_constraints_.wz, control_constraints_.wz, wz_new);
-
-          if (is_holo) {
-            float vy_last = state.vy(j, i - 1);
-            float cvy_cmd = state.cvy(j, i - 1);
-            float min_vy_acc = vy_last - max_delta_vy;
-            float max_vy_acc = vy_last + max_delta_vy;
-            float cvy_feasible = utils::clamp(min_vy_acc, max_vy_acc, cvy_cmd);
-
-            float vy_new = vy_last + model_dt_ * (cvy_feasible - vy_last) / tau_vy_;
-            state.vy(j, i) = utils::clamp(-control_constraints_.vy, control_constraints_.vy, vy_new);
-          }
-        }
-      }
-    }
-  float getTauVx() const { return tau_vx_; }
-private:
-  bool is_holonomic_;
-  float tau_vx_{0.05f};
-  float tau_vy_{0.05f};
-  float tau_wz_{0.05f};
-  float last_vx_{0.0f};
-  float last_vy_{0.0f};
-  float last_wz_{0.0f};
-  float smoothing_alpha_{0.2f};
-  float min_tau_{0.01f};
-  float max_tau_{0.5f};
 };
 
 }  // namespace mppi

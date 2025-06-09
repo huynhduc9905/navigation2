@@ -27,7 +27,7 @@
 
 namespace mppi
 {
-geometry_msgs::msg::Twist last_cmd_vel_;
+
 void Optimizer::initialize(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent, const std::string & name,
   std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros,
@@ -80,6 +80,11 @@ void Optimizer::getParams()
   getParam(s.sampling_std.vy, "vy_std", 0.2f);
   getParam(s.sampling_std.wz, "wz_std", 0.4f);
   getParam(s.retry_attempt_limit, "retry_attempt_limit", 1);
+  getParam(use_adaptive_lag_, "use_adaptive_lag", false);
+  getParam(smoothing_alpha_, "smoothing_alpha", 0.2f);
+  getParam(min_tau_, "min_tau", 0.01f);
+  getParam(max_tau_, "max_tau", 0.5f);
+  getParam(debug_tau_, "debug_tau", false);
 
   s.base_constraints.ax_max = fabs(s.base_constraints.ax_max);
   if (s.base_constraints.ax_min > 0.0) {
@@ -99,6 +104,13 @@ void Optimizer::getParams()
   double controller_frequency;
   getParentParam(controller_frequency, "controller_frequency", 0.0, ParameterType::Static);
   setOffset(controller_frequency);
+
+  if (debug_tau_) {
+    RCLCPP_WARN(
+      logger_,
+      "debug_tau is enabled: tau_vx will be assigned to twist.linear.y for debugging. "
+      "Disable for normal operation.");
+  }
 }
 
 void Optimizer::setOffset(double controller_frequency)
@@ -118,7 +130,7 @@ void Optimizer::setOffset(double controller_frequency)
     settings_.shift_control_sequence = true;
   } else {
     throw nav2_core::ControllerException(
-            "Controller period more then model dt, set it equal to model dt");
+      "Controller period more then model dt, set it equal to model dt");
   }
 }
 
@@ -137,9 +149,8 @@ void Optimizer::reset()
   generated_trajectories_.reset(settings_.batch_size, settings_.time_steps);
 
   noise_generator_.reset(settings_, isHolonomic());
-  last_cmd_vel_.linear.x = 0.0;
-  last_cmd_vel_.linear.y = 0.0;
-  last_cmd_vel_.angular.z = 0.0;
+  last_cmd_vel_ = Twist()
+
   RCLCPP_INFO(logger_, "Optimizer reset");
 }
 
@@ -165,9 +176,9 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
 
   // Plot taux just for debug
-  auto adaptive_model = std::dynamic_pointer_cast<AdaptiveMotionModel>(motion_model_);
-  if (adaptive_model) {
-      control.twist.linear.y = adaptive_model->getTauVx();
+  if (debug_tau_) {
+    control.twist.linear.y = motion_model_->getTauVx();
+    control.twist.angular.x = motion_model_->getTauWz();
   }
 
   last_cmd_vel_ = control.twist;
@@ -220,10 +231,7 @@ void Optimizer::prepare(
   costs_.setZero();
   goal_ = goal;
 
-  auto adaptive_model = std::dynamic_pointer_cast<AdaptiveMotionModel>(motion_model_);
-  if (adaptive_model) {
-      adaptive_model->updateTau(robot_speed, last_cmd_vel_, settings_.model_dt);
-  }
+  motion_model_->updateTau(robot_speed, last_cmd_vel_, settings_.model_dt);
 
   critics_data_.fail_flag = false;
   critics_data_.goal_checker = goal_checker;
@@ -477,15 +485,14 @@ void Optimizer::setMotionModel(const std::string & model)
     motion_model_ = std::make_shared<OmniMotionModel>();
   } else if (model == "Ackermann") {
     motion_model_ = std::make_shared<AckermannMotionModel>(parameters_handler_, name_);
-  } else if (model == "AdaptiveDiffDrive") {
-      motion_model_ = std::make_shared<AdaptiveMotionModel>(false, parameters_handler_, name_);
   } else {
     throw nav2_core::ControllerException(
-            std::string(
+      std::string(
               "Model " + model + " is not valid! Valid options are DiffDrive, Omni, "
               "or Ackermann"));
   }
-  motion_model_->initialize(settings_.constraints, settings_.model_dt);
+  motion_model_->initialize(
+    settings_.constraints, settings_.model_dt, use_adaptive_lag_, smoothing_alpha_, min_tau_, max_tau_);
 }
 
 void Optimizer::setSpeedLimit(double speed_limit, bool percentage)
