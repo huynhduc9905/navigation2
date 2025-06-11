@@ -149,10 +149,10 @@ public:
         float max_vx_acc = vx_last + max_delta_vx;
         float cvx_feasible = utils::clamp(min_vx_acc, max_vx_acc, cvx_cmd);
 
-        float vx_new = use_adaptive_lag_ ?
-          vx_last + model_dt_ * (cvx_feasible - vx_last) / tau_vx_ :
-          cvx_feasible;
-        state.vx(j, i) = utils::clamp(control_constraints_.vx_min, control_constraints_.vx_max, vx_new);
+        // float vx_new = use_adaptive_lag_ ?
+        //   vx_last + model_dt_ * (cvx_feasible - vx_last) / tau_vx_ :
+        //   cvx_feasible;
+        state.vx(j, i) = utils::clamp(control_constraints_.vx_min, control_constraints_.vx_max, cvx_feasible);
 
         float wz_last = state.wz(j, i - 1);
         float & cwz_cmd = state.cwz(j, i - 1);
@@ -160,10 +160,10 @@ public:
         float max_wz_acc = wz_last + max_delta_wz;
         float cwz_feasible = utils::clamp(min_wz_acc, max_wz_acc, cwz_cmd);
 
-        float wz_new = use_adaptive_lag_ ?
-          wz_last + model_dt_ * (cwz_feasible - wz_last) / tau_wz_ :
-          cwz_feasible;
-        state.wz(j, i) = utils::clamp(-control_constraints_.wz, control_constraints_.wz, wz_new);
+        // float wz_new = use_adaptive_lag_ ?
+        //   wz_last + model_dt_ * (cwz_feasible - wz_last) / tau_wz_ :
+        //   cwz_feasible;
+        state.wz(j, i) = utils::clamp(-control_constraints_.wz, control_constraints_.wz, cwz_feasible);
 
         if (is_holo) {
           float vy_last = state.vy(j, i - 1);
@@ -172,10 +172,10 @@ public:
           float max_vy_acc = vy_last + max_delta_vy;
           float cvy_feasible = utils::clamp(min_vy_acc, max_vy_acc, cvy_cmd);
 
-          float vy_new = use_adaptive_lag_ ?
-            vy_last + model_dt_ * (cvy_feasible - vy_last) / tau_vy_ :
-            cvy_feasible;
-          state.vy(j, i) = utils::clamp(-control_constraints_.vy, control_constraints_.vy, vy_new);
+          // float vy_new = use_adaptive_lag_ ?
+          //   vy_last + model_dt_ * (cvy_feasible - vy_last) / tau_vy_ :
+          //   cvy_feasible;
+          state.vy(j, i) = utils::clamp(-control_constraints_.vy, control_constraints_.vy, cvy_feasible);
         }
       }
     }
