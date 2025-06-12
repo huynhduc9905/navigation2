@@ -85,20 +85,20 @@ public:
     for (unsigned int i = 1; i != n_cols; i++) {
       for (unsigned int j = 0; j != n_rows; j++) {
         float vx_last = state.vx(j, i - 1);
-        float & cvx_curr = state.cvx(j, i - 1);
-        cvx_curr = utils::clamp(vx_last + min_delta_vx, vx_last + max_delta_vx, cvx_curr);
-        state.vx(j, i) = cvx_curr;
+        float cvx_curr = state.cvx(j, i - 1);
+        float cvx_feasible = utils::clamp(vx_last + min_delta_vx, vx_last + max_delta_vx, cvx_curr);
+        state.vx(j, i) = cvx_feasible;
 
         float wz_last = state.wz(j, i - 1);
-        float & cwz_curr = state.cwz(j, i - 1);
-        cwz_curr = utils::clamp(wz_last - max_delta_wz, wz_last + max_delta_wz, cwz_curr);
-        state.wz(j, i) = cwz_curr;
+        float cwz_curr = state.cwz(j, i - 1);
+        float cwz_feasible = utils::clamp(wz_last - max_delta_wz, wz_last + max_delta_wz, cwz_curr);
+        state.wz(j, i) = cwz_feasible;
 
         if (is_holo) {
           float vy_last = state.vy(j, i - 1);
-          float & cvy_curr = state.cvy(j, i - 1);
-          cvy_curr = utils::clamp(vy_last - max_delta_vy, vy_last + max_delta_vy, cvy_curr);
-          state.vy(j, i) = cvy_curr;
+          float cvy_curr = state.cvy(j, i - 1);
+          float cvy_feasible = utils::clamp(vy_last - max_delta_vy, vy_last + max_delta_vy, cvy_curr);
+          state.vy(j, i) = cvy_feasible;
         }
       }
     }
