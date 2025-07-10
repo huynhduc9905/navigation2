@@ -1,55 +1,57 @@
-
-<!--
-  This BT has all the functionalities of navigate_to_pose_w_replanning_and_recovery.xml,
-  with an additional feature to cancel the control closer to the goal proximity and
-  make the robot wait for a specific time, to see if the obstacle clears out before
-  navigating along a significantly longer path to reach the goal location.
--->
-<root BTCPP_format="4" main_tree_to_execute="MainTree">
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4"
+      main_tree_to_execute="MainTree">
   <BehaviorTree ID="MainTree">
-    <RecoveryNode number_of_retries="6" name="NavigateRecovery">
+    <RecoveryNode name="NavigateRecovery"
+                  number_of_retries="6">
       <PipelineSequence name="NavigateWithReplanning">
-        <ControllerSelector selected_controller="{selected_controller}" default_controller="FollowPath" topic_name="controller_selector"/>
-        <PlannerSelector selected_planner="{selected_planner}" default_planner="GridBased" topic_name="planner_selector"/>
-        <RateController hz="1.0">
-          <Fallback>
-            <ReactiveSequence>
-              <Inverter>
-                <GlobalUpdatedGoal/>
-              </Inverter>
-              <IsPathValid path="{path}"/>
-            </ReactiveSequence>
-            <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
-          </Fallback>
-        </RateController>
+        <ControllerSelector topic_name="controller_selector"
+                            default_controller="FollowPath"
+                            selected_controller="{selected_controller}"/>
+        <PlannerSelector topic_name="planner_selector"
+                         default_planner="GridBased"
+                         selected_planner="{selected_planner}"/>
+        <SpeedController min_rate="0.125"
+                         max_rate="5.0"
+                         min_speed="0.0"
+                         max_speed="0.4">
+          <RecoveryNode name="ComputePathToPose"
+                        number_of_retries="1">
+            <Fallback>
+              <GoalReached goal="{goal}"/>
+              <ComputePathToPose goal="{goal}"
+                                 planner_id="{selected_planner}"
+                                 path="{path}"
+                                 error_code_id="{compute_path_error_code}"/>
+            </Fallback>
+            <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+                                service_name="global_costmap/clear_entirely_global_costmap"/>
+          </RecoveryNode>
+        </SpeedController>
         <ReactiveSequence name="MonitorAndFollowPath">
-          <PathLongerOnApproach path="{path}" prox_len="20" length_factor="1.1">
+          <PathLongerOnApproach path="{path}"
+                                prox_len="20"
+                                length_factor="1.01">
             <RetryUntilSuccessful num_attempts="1">
               <SequenceWithMemory name="CancelingControlAndWait">
                 <CancelControl name="ControlCancel"/>
-                <Wait wait_duration="5.0"/>
-                <ComputePathToPose goal="{goal}" path="{path}" planner_id="{selected_planner}" error_code_id="{compute_path_error_code}"/>
+                <Wait wait_duration="10.0"/>
               </SequenceWithMemory>
             </RetryUntilSuccessful>
           </PathLongerOnApproach>
-          <RecoveryNode number_of_retries="1" name="FollowPath">
-            <FollowPath path="{path}" controller_id="{selected_controller}" error_code_id="{follow_path_error_code}"/>
-            <ClearEntireCostmap name="ClearLocalCostmap-Context" service_name="local_costmap/clear_entirely_local_costmap"/>
+          <RecoveryNode name="FollowPath"
+                        number_of_retries="1">
+            <FollowPath controller_id="{selected_controller}"
+                        path="{path}"
+                        error_code_id="{follow_path_error_code}"/>
+            <ClearEntireCostmap name="ClearLocalCostmap-Context"
+                                service_name="local_costmap/clear_entirely_local_costmap"/>
           </RecoveryNode>
         </ReactiveSequence>
       </PipelineSequence>
-      <ReactiveFallback name="RecoveryFallback">
-        <GoalUpdated/>
-        <RoundRobin name="RecoveryActions">
-          <Sequence name="ClearingActions">
-            <ClearEntireCostmap name="ClearLocalCostmap-Subtree" service_name="local_costmap/clear_entirely_local_costmap"/>
-            <ClearEntireCostmap name="ClearGlobalCostmap-Subtree" service_name="global_costmap/clear_entirely_global_costmap"/>
-          </Sequence>
-          <Wait wait_duration="5.0"/>
-          <Spin spin_dist="1.57"/>
-          <BackUp backup_dist="0.30" backup_speed="0.15"/>
-        </RoundRobin>
-      </ReactiveFallback>
+      <Wait wait_duration="1.0"/>
     </RecoveryNode>
   </BehaviorTree>
+
+
 </root>
