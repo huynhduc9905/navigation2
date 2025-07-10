@@ -10,3 +10,4 @@ plugin_add_test(test_control_pause_resume_controller
   test_pause_resume_controller.cpp nav2_pause_resume_controller_bt_node)
 
 plugin_add_test(test_persistent_sequence test_persistent_sequence.cpp nav2_persistent_sequence_bt_node)
+
