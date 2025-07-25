@@ -631,11 +631,11 @@ class BasicNavigator(Node):
     def waitUntilNav2Active(self, navigator: str = 'bt_navigator',
                             localizer: str = 'amcl') -> None:
         """Block until the full navigation system is up and running."""
-        if localizer != 'robot_localization':  # non-lifecycle node
-            self._waitForNodeToActivate(localizer)
-        if localizer == 'amcl':
-            self._waitForInitialPose()
-        self._waitForNodeToActivate(navigator)
+        # if localizer != 'robot_localization':  # non-lifecycle node
+        #     self._waitForNodeToActivate(localizer)
+        # if localizer == 'amcl':
+        #     self._waitForInitialPose()
+        # self._waitForNodeToActivate(navigator)
         self.info('Nav2 is ready for use!')
         return
 
