@@ -17,6 +17,8 @@ find_package(std_msgs REQUIRED)
 find_package(std_srvs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(tf2_geometry_msgs REQUIRED)
+
 
 nav2_package()
 
@@ -42,6 +44,7 @@ target_link_libraries(${library_name} PUBLIC
   ${sensor_msgs_TARGETS}
   tf2::tf2
   tf2_ros::tf2_ros
+  tf2_geometry_msgs::tf2_geometry_msgs
 )
 
 add_library(nav2_compute_path_to_pose_action_bt_node SHARED plugins/action/compute_path_to_pose_action.cpp)
@@ -259,6 +262,7 @@ foreach(bt_plugin ${plugin_libs})
     ${sensor_msgs_TARGETS}
     tf2::tf2
     tf2_ros::tf2_ros
+    tf2_geometry_msgs::tf2_geometry_msgs
     ${std_msgs_TARGETS}
     ${std_srvs_TARGETS}
   )
@@ -328,6 +332,7 @@ ament_export_dependencies(
   std_srvs
   tf2
   tf2_ros
+  tf2_geometry_msgs
 )
 ament_export_targets(${library_name})
 
