@@ -33,7 +33,12 @@ NavigateToPoseNavigator::configure(
     node->declare_parameter("goal_blackboard_id", std::string("goal"));
   }
 
+  if (!node->has_parameter("start_pose_blackboard_id")) {
+    node->declare_parameter("start_pose_blackboard_id", std::string("start"));
+  }
+
   goal_blackboard_id_ = node->get_parameter("goal_blackboard_id").as_string();
+  start_pose_blackboard_id_ = node->get_parameter("start_pose_blackboard_id").as_string();
 
   if (!node->has_parameter("path_blackboard_id")) {
     node->declare_parameter("path_blackboard_id", std::string("path"));
@@ -269,6 +274,7 @@ NavigateToPoseNavigator::initializeGoalPose(ActionT::Goal::ConstSharedPtr goal)
 
   // Update the goal pose on the blackboard
   blackboard->set(goal_blackboard_id_, goal_pose);
+  blackboard->set(start_pose_blackboard_id_, current_pose);
 
   return true;
 }

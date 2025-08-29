@@ -304,6 +304,11 @@
       <input_port name="robot_base_frame">Robot base frame</input_port>
     </Condition>
 
+    <Condition ID="IsNearStart">
+      <input_port name="start">Start pose</input_port>
+      <input_port name="robot_base_frame">Robot base frame</input_port>
+    </Condition>
+
     <Condition ID="IsStuck"/>
 
     <Condition ID="IsStopped">
