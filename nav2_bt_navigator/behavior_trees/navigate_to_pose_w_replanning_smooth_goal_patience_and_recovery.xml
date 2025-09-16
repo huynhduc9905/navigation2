@@ -10,10 +10,10 @@
         <PlannerSelector topic_name="planner_selector"
                          default_planner="GridBased"
                          selected_planner="{selected_planner}"/>
-        <SpeedController min_rate="0.25"
-                         max_rate="5.0"
+        <SpeedController min_rate="0.2"
+                         max_rate="2.0"
                          min_speed="0.0"
-                         max_speed="0.4">
+                         max_speed="0.5">
           <RecoveryNode name="ComputePathToPose"
                         number_of_retries="1">
             <Sequence>
@@ -36,8 +36,8 @@
         </SpeedController>
         <ReactiveSequence name="MonitorAndFollowPath">
           <PathLongerOnApproach path="{path}"
-                                prox_len="20"
-                                length_factor="1.01">
+                                prox_len="1000000"
+                                length_factor="1.05">
             <RetryUntilSuccessful num_attempts="1">
               <SequenceWithMemory name="CancelingControlAndWait">
                 <CancelControl name="ControlCancel"/>
