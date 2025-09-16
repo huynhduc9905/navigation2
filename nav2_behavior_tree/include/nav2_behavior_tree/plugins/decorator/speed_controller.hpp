@@ -90,11 +90,16 @@ private:
    * @return float euclid distance value
    */
 
-  inline double euclideanDistance2D(float x1, float y1, float x2, float y2)
-  {
+  inline bool canSeeGoal(float x1, float y1, float yaw, float x2, float y2, float threshold = M_PI){
     float dx = x2 - x1;
     float dy = y2 - y1;
-    return std::sqrt(dx * dx + dy * dy);
+    float goal_heading = std::atan2(dy, dx);
+    
+    float diff = goal_heading - yaw;
+    while (diff > M_PI)  diff -= 2.0 * M_PI;
+    while (diff < -M_PI) diff += 2.0 * M_PI;
+
+    return std::fabs(diff) <= (threshold / 2.0f);
   }
 
   /**
@@ -132,10 +137,10 @@ private:
       period_ = 0.0;
     }
     else{
-      auto velocity = odom_smoother_->getTwist();
-      double speed = std::hypot(velocity.linear.x, velocity.linear.y);
-      double rate = getScaledRate(speed);
-      period_ = 1.0 / rate;
+    auto velocity = odom_smoother_->getTwist();
+    double speed = std::hypot(velocity.linear.x, velocity.linear.y);
+    double rate = getScaledRate(speed);
+    period_ = 1.0 / rate;
     }
   }
 
@@ -169,11 +174,6 @@ private:
   double min_speed_;
   double max_speed_;
   double d_speed_;
-
-  // Initial position
-  double init_x_;
-  double init_y_;
-  double init_z_;
 
   // Current position
   double current_x_;

@@ -64,7 +64,7 @@ SpeedController::SpeedController(
       std::chrono::milliseconds(100),
       std::bind(&SpeedController::onTimer, this),
       callback_group_);
-
+      
   start_pose_process_ = false;
   release_ = false;
 
@@ -134,15 +134,15 @@ inline BT::NodeStatus SpeedController::tick()
     if (first_tick_ == true){
       try {
         geometry_msgs::msg::TransformStamped t = tf_buffer_->lookupTransform("map", "base_link", tf2::TimePointZero);
-        init_x_ = t.transform.translation.x;
-        init_y_ = t.transform.translation.y;
+        current_x_ = t.transform.translation.x;
+        current_y_ = t.transform.translation.y;
         geometry_msgs::msg::Quaternion q_msg = t.transform.rotation;
         tf2::Quaternion q;
         tf2::fromMsg(q_msg, q);
         double roll = 0.0, pitch = 0.0, yaw = 0.0;
         tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
-        init_z_ = yaw;
-        RCLCPP_INFO(this->node_->get_logger(), "Init x: %f, Init y: %f, Init z: %f", init_x_, init_y_, init_z_);
+        current_z_ = yaw;
+        RCLCPP_INFO(this->node_->get_logger(), "Init x: %f, Init y: %f, Init z: %f", current_x_, current_y_, current_z_);
       } catch (const tf2::TransformException &ex) {
         RCLCPP_WARN(this->node_->get_logger(), "TF lookup failed: %s", ex.what());
       }
@@ -155,14 +155,16 @@ inline BT::NodeStatus SpeedController::tick()
     // update period if the last period is exceeded
     if (elapsed.seconds() >= period_) {
       if (start_pose_process_ == true){
-        if (euclideanDistance2D(current_x_, current_y_, init_x_, init_y_) <= 0.5){
+        if (!canSeeGoal(current_x_, current_y_, current_z_, goal_.pose.position.x, goal_.pose.position.y))
+        {
           updatePeriod();
-          //RCLCPP_INFO(node_->get_logger(), "DEBUG: Robot is not moving forward, waiting more 0.25s before planning");
+          //RCLCPP_INFO(node_->get_logger(), "DEBUG: Robot cant see goal, waiting more 0.25s before planning");
           return BT::NodeStatus::RUNNING;
-        }
-        else{
+        } 
+        else
+        {
           release_ = true;
-          //RCLCPP_INFO(node_->get_logger(), "DEBUG: Robot moving forward, update period now");
+          //RCLCPP_INFO(node_->get_logger(), "DEBUG: Robot can see goal, update period now");
         }
       }
       updatePeriod();
