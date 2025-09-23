@@ -18,6 +18,7 @@
 #include "nav2_util/geometry_utils.hpp"
 
 #include "nav2_behavior_tree/plugins/decorator/path_longer_on_approach.hpp"
+#include "rclcpp/qos.hpp"
 
 namespace nav2_behavior_tree
 {
@@ -28,6 +29,8 @@ PathLongerOnApproach::PathLongerOnApproach(
 : BT::DecoratorNode(name, conf)
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
+  rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+  signal_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
 }
 
 bool PathLongerOnApproach::isPathUpdated(
@@ -77,6 +80,16 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
   if (isPathUpdated(new_path_, old_path_) && isRobotInGoalProximity(old_path_, prox_len_) &&
     isNewPathLonger(new_path_, old_path_, length_factor_) && !first_time_)
   {
+    //Publish stuck signal
+    NodeSignal node_signal_msg;
+    node_signal_msg.signal = node_signal_msg.STUCK;
+    node_signal_msg.state = true;
+    if (current_signal_state_ != node_signal_msg.state)
+    {
+      signal_pub_->publish(node_signal_msg);
+      current_signal_state_ = node_signal_msg.state;
+    }
+
     const BT::NodeStatus child_state = child_node_->executeTick();
     switch (child_state) {
       case BT::NodeStatus::SKIPPED:
@@ -94,6 +107,17 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
   }
   old_path_ = new_path_;
   first_time_ = false;
+
+  //Publish not stuck signal
+  NodeSignal node_signal_msg;
+  node_signal_msg.signal = node_signal_msg.STUCK;
+  node_signal_msg.state = false;
+  if (current_signal_state_ != node_signal_msg.state)
+  {
+    signal_pub_->publish(node_signal_msg);
+    current_signal_state_ = node_signal_msg.state;
+  }
+
   return BT::NodeStatus::SUCCESS;
 }
 

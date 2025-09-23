@@ -26,6 +26,9 @@ RecoveryNode::RecoveryNode(
   number_of_retries_(1),
   retry_count_(0)
 {
+  node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
+  rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+  node_status_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
 }
 
 BT::NodeStatus RecoveryNode::tick()
@@ -53,9 +56,15 @@ BT::NodeStatus RecoveryNode::tick()
         case BT::NodeStatus::SUCCESS:
           // reset node and return success when first child returns success
           // also halt the recovery action as the main action is successful, reset its state
-          ControlNode::haltChild(1);
-          halt();
-          return BT::NodeStatus::SUCCESS;
+          {
+            NodeSignal stuck_signal_msg_;
+            stuck_signal_msg_.signal = NodeSignal::STUCK;
+            stuck_signal_msg_.state = false;
+            node_status_pub_->publish(stuck_signal_msg_);
+            ControlNode::haltChild(1);
+            halt();
+            return BT::NodeStatus::SUCCESS;
+          }
 
         case BT::NodeStatus::RUNNING:
           return BT::NodeStatus::RUNNING;
@@ -64,6 +73,10 @@ BT::NodeStatus RecoveryNode::tick()
           {
             if (retry_count_ < number_of_retries_) {
               // halt first child and tick second child in next iteration
+              NodeSignal stuck_signal_msg_;
+              stuck_signal_msg_.signal = NodeSignal::STUCK;
+              stuck_signal_msg_.state = true;
+              node_status_pub_->publish(stuck_signal_msg_);
               ControlNode::haltChild(0);
               current_child_idx_++;
               break;
