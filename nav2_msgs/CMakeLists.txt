@@ -39,6 +39,8 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "msg/Trajectory.msg"
   "msg/TrajectoryPoint.msg"
   "msg/NodeSignal.msg"
+  "msg/WarningCommand.msg"
+  "msg/WarningStatus.msg"
   "srv/GetCosts.srv"
   "srv/GetCostmap.srv"
   "srv/IsPathValid.srv"
