@@ -26,10 +26,12 @@
 #include "nav2_behavior_tree/bt_utils.hpp"
 #include "nav2_behavior_tree/json_utils.hpp"
 #include "rclcpp/rclcpp.hpp"
+#include "nav2_msgs/msg/node_signal.hpp"
 
 namespace nav2_behavior_tree
 {
 
+using NodeSignal = nav2_msgs::msg::NodeSignal;
 /**
  * @brief A BT::DecoratorNode that ticks its child every time when the length of
  * the new path is smaller than the old one by the length given by the user.
@@ -111,7 +113,9 @@ private:
   double prox_len_ = std::numeric_limits<double>::max();
   double length_factor_ = std::numeric_limits<double>::max();
   rclcpp::Node::SharedPtr node_;
+  rclcpp::Publisher<NodeSignal>::SharedPtr signal_pub_;
   bool first_time_ = true;
+  bool current_signal_state_ = false;
 };
 
 }  // namespace nav2_behavior_tree
