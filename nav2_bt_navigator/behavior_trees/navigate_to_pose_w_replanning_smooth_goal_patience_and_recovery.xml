@@ -37,7 +37,7 @@
         <ReactiveSequence name="MonitorAndFollowPath">
           <PathLongerOnApproach path="{path}"
                                 prox_len="1000000"
-                                length_factor="1.05">
+                                length_factor="1.02">
             <RetryUntilSuccessful num_attempts="1">
               <SequenceWithMemory name="CancelingControlAndWait">
                 <CancelControl name="ControlCancel"/>
