@@ -31,6 +31,7 @@ PathLongerOnApproach::PathLongerOnApproach(
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
   signal_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
+  warning_cmd_pub_ = rclcpp::create_publisher<WarningCommand>(node_, "/audio/warn/command", 10);
 }
 
 bool PathLongerOnApproach::isPathUpdated(
@@ -90,6 +91,15 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
       current_signal_state_ = node_signal_msg.state;
     }
 
+    if (!warning_cmd_sent_)
+    {
+      WarningCommand warning_cmd_msg;
+      warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
+      warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
+      warning_cmd_pub_->publish(warning_cmd_msg);
+      warning_cmd_sent_ = true;
+    }
+
     const BT::NodeStatus child_state = child_node_->executeTick();
     switch (child_state) {
       case BT::NodeStatus::SKIPPED:
@@ -117,6 +127,7 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
     signal_pub_->publish(node_signal_msg);
     current_signal_state_ = node_signal_msg.state;
   }
+  warning_cmd_sent_ = false;
 
   return BT::NodeStatus::SUCCESS;
 }
