@@ -439,6 +439,7 @@
       <input_port name="path">Planned Path</input_port>
       <input_port name="prox_len">Proximity length (m) for the path to be longer on approach</input_port>
       <input_port name="length_factor">Length multiplication factor to check if the path is significantly longer </input_port>
+      <input_port name="server_timeout">Server timeout</input_port>
     </Decorator>
 
     <Decorator ID="GoalUpdatedController">

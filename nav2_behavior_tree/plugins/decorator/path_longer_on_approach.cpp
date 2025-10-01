@@ -30,8 +30,11 @@ PathLongerOnApproach::PathLongerOnApproach(
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+  client_ = std::make_shared<nav2_util::ServiceClient<nav2_msgs::srv::IsPathValid>>("is_path_valid",
+      node_, false /* Does not create and spin an internal executor*/);
   signal_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
   warning_cmd_pub_ = rclcpp::create_publisher<WarningCommand>(node_, "/audio/warn/command", 10);
+  server_timeout_ = config().blackboard->template get<std::chrono::milliseconds>("server_timeout");
 }
 
 bool PathLongerOnApproach::isPathUpdated(
@@ -76,10 +79,22 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
   }
   setStatus(BT::NodeStatus::RUNNING);
 
+  if (!old_path_.poses.empty())
+  {
+    auto request = std::make_shared<nav2_msgs::srv::IsPathValid::Request>();
+
+    request->path = old_path_;
+    request->max_cost = max_cost_;
+    request->consider_unknown_as_obstacle = consider_unknown_as_obstacle_;
+    auto response = client_->invoke(request);
+
+    is_current_path_valid_ = response->is_valid;
+  }
+
   // Check if the path is updated and valid, compare the old and the new path length,
   // given the goal proximity and check if the new path is longer
   if (isPathUpdated(new_path_, old_path_) && isRobotInGoalProximity(old_path_, prox_len_) &&
-    isNewPathLonger(new_path_, old_path_, length_factor_) && !first_time_)
+    isNewPathLonger(new_path_, old_path_, length_factor_) && !first_time_ && !is_current_path_valid_)
   {
     //Publish stuck signal
     NodeSignal node_signal_msg;
