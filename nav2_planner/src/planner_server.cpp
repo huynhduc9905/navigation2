@@ -690,7 +690,9 @@ void PlannerServer::isPathValid(
     unsigned int mx = 0;
     unsigned int my = 0;
 
-    bool use_radius = costmap_ros_->getUseRadius();
+    //bool use_radius = costmap_ros_->getUseRadius();
+    // Force checking is_path_valid use radius
+    bool use_radius = true;
 
     unsigned int cost = nav2_costmap_2d::FREE_SPACE;
     for (unsigned int i = closest_point_index; i < request->path.poses.size(); ++i) {

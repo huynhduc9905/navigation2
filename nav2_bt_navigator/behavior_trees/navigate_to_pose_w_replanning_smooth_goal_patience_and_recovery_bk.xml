@@ -26,24 +26,24 @@
                           check_for_collisions="false"
                           smoothed_path="{smooth_path}"
                           error_code_id="{smooth_path_error_code}"/>
+              <RecoveryNode name="CheckGoalOccupied"
+                            number_of_retries="1">
+                <Inverter>
+                  <IsPoseOccupied pose="{goal}"
+                                  cost_threshold="230"
+                                  use_footprint="false"/>
+                </Inverter>
+                <SequenceWithMemory name="CancelingControlAndWait">
+                  <CancelControl name="ControlCancel"/>
+                  <Wait wait_duration="1.0"/>
+                </SequenceWithMemory>
+              </RecoveryNode>
             </Sequence>
             <ClearEntireCostmap name="ClearGlobalCostmap-Context"
                                 service_name="global_costmap/clear_entirely_global_costmap"/>
           </RecoveryNode>
         </SpeedController>
         <ReactiveSequence name="MonitorAndFollowPath">
-          <RecoveryNode name="CheckGoalOccupied"
-                        number_of_retries="30">
-            <Inverter>
-              <IsPoseOccupied pose="{goal}"
-                              cost_threshold="230"
-                              use_footprint="false"/>
-            </Inverter>
-            <SequenceWithMemory name="CancelingControlAndWait">
-              <CancelControl name="ControlCancel"/>
-              <Wait wait_duration="1.0"/>
-            </SequenceWithMemory>
-          </RecoveryNode>
           <PathLongerOnApproach path="{path}"
                                 prox_len="1000000"
                                 length_factor="1.01">
@@ -67,4 +67,6 @@
       <Wait wait_duration="1.0"/>
     </RecoveryNode>
   </BehaviorTree>
+
+
 </root>
