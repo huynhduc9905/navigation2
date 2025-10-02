@@ -36,11 +36,13 @@
                         number_of_retries="30">
             <Inverter>
               <IsPoseOccupied pose="{goal}"
-                              cost_threshold="230"
+                              cost_threshold="200"
                               use_footprint="false"/>
             </Inverter>
             <SequenceWithMemory name="CancelingControlAndWait">
               <CancelControl name="ControlCancel"/>
+              <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+                    service_name="global_costmap/clear_entirely_global_costmap"/>
               <Wait wait_duration="1.0"/>
             </SequenceWithMemory>
           </RecoveryNode>
