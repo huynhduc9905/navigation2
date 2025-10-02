@@ -45,7 +45,10 @@ PlannerServer::PlannerServer(const rclcpp::NodeOptions & options)
   default_ids_{"GridBased"},
   default_types_{"nav2_navfn_planner::NavfnPlanner"},
   costmap_update_timeout_(1s),
-  costmap_(nullptr)
+  costmap_(nullptr),
+  turning_status(TurnSignal::FORWARD),
+  turning_look_ahead_range_(120),
+  turning_consider_percent_(6.0)
 {
   RCLCPP_INFO(get_logger(), "Creating");
 
@@ -53,6 +56,8 @@ PlannerServer::PlannerServer(const rclcpp::NodeOptions & options)
   declare_parameter("planner_plugins", default_ids_);
   declare_parameter("expected_planner_frequency", 1.0);
   declare_parameter("costmap_update_timeout", 1.0);
+  declare_parameter("turning_look_ahead_range", 120);
+  declare_parameter("turning_consider_percent", 6.0);
 
   get_parameter("planner_plugins", planner_ids_);
   if (planner_ids_ == default_ids_) {
@@ -146,10 +151,18 @@ PlannerServer::on_configure(const rclcpp_lifecycle::State & state)
 
   // Initialize pubs & subs
   plan_publisher_ = create_publisher<nav_msgs::msg::Path>("plan", 1);
+  rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+  signal_pub_ = create_publisher<nav2_msgs::msg::NodeSignal>("/node_signal", node_signal_qos);
+  #ifdef CHASING_POSE_DEBUG
+  chasing_pose_pub_ = create_publisher<geometry_msgs::msg::PoseStamped>("/chasing_pose", 10);
+  #endif
 
   double costmap_update_timeout_dbl;
   get_parameter("costmap_update_timeout", costmap_update_timeout_dbl);
   costmap_update_timeout_ = rclcpp::Duration::from_seconds(costmap_update_timeout_dbl);
+
+  get_parameter("turning_look_ahead_range", turning_look_ahead_range_);
+  get_parameter("turning_consider_percent", turning_consider_percent_);
 
   // Create the action servers for path planning to a pose and through poses
   action_server_pose_ = std::make_unique<ActionServerToPose>(
@@ -177,6 +190,10 @@ PlannerServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
   RCLCPP_INFO(get_logger(), "Activating");
 
   plan_publisher_->on_activate();
+  signal_pub_->on_activate();
+  #ifdef CHASING_POSE_DEBUG
+  chasing_pose_pub_->on_activate();
+  #endif
   action_server_pose_->activate();
   action_server_poses_->activate();
   const auto costmap_ros_state = costmap_ros_->activate();
@@ -216,6 +233,10 @@ PlannerServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
   action_server_pose_->deactivate();
   action_server_poses_->deactivate();
   plan_publisher_->on_deactivate();
+  signal_pub_->on_deactivate();
+  #ifdef CHASING_POSE_DEBUG
+  chasing_pose_pub_->on_deactivate();
+  #endif
 
   /*
    * The costmap is also a lifecycle node, so it may have already fired on_deactivate
@@ -248,6 +269,10 @@ PlannerServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
   action_server_pose_.reset();
   action_server_poses_.reset();
   plan_publisher_.reset();
+  signal_pub_.reset();
+  #ifdef CHASING_POSE_DEBUG
+  chasing_pose_pub_.reset();
+  #endif
   tf_.reset();
 
   costmap_ros_->cleanup();
@@ -565,6 +590,117 @@ PlannerServer::computePlan()
         1 / max_planner_duration_, 1 / cycle_duration.seconds());
     }
     action_server_pose_->succeeded_current(result);
+    
+    // Checking whether robot turning status
+    geometry_msgs::msg::PoseStamped current_pose;
+    unsigned int closest_point_index = 0;
+    if (costmap_ros_->getRobotPose(current_pose)) {
+      float current_distance = std::numeric_limits<float>::max();
+      float closest_distance = current_distance;
+      geometry_msgs::msg::Point current_point = current_pose.pose.position;
+      for (unsigned int i = 0; i < result->path.poses.size(); ++i) {
+        geometry_msgs::msg::Point path_point = result->path.poses[i].pose.position;
+
+        current_distance = nav2_util::geometry_utils::euclidean_distance(
+          current_point,
+          path_point);
+
+        if (current_distance < closest_distance) {
+          closest_point_index = i;
+          closest_distance = current_distance;
+        }
+      }
+      
+      float chasing_index = closest_point_index + turning_look_ahead_range_;
+      geometry_msgs::msg::Point chasing_point;
+      if (chasing_index >= (result->path.poses.size() - 1)) {
+        chasing_point = result->path.poses.back().pose.position;
+      }
+      else {
+        chasing_point = result->path.poses[chasing_index].pose.position;
+      }
+      
+      #ifdef CHASING_POSE_DEBUG
+      geometry_msgs::msg::PoseStamped chasing_pose_msg;
+      chasing_pose_msg.header.frame_id = "map";
+      chasing_pose_msg.header.stamp = this->get_clock()->now();
+      chasing_pose_msg.pose.position.x = chasing_point.x;
+      chasing_pose_msg.pose.position.y = chasing_point.y;
+      chasing_pose_pub_->publish(chasing_pose_msg);
+      #endif
+
+      geometry_msgs::msg::Quaternion q_msg = current_pose.pose.orientation;
+      tf2::Quaternion q;
+      tf2::fromMsg(q_msg, q);
+      double roll = 0.0, pitch = 0.0, yaw = 0.0;
+      tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+      float current_pose_yaw = yaw;
+      nav2_msgs::msg::NodeSignal node_signal_msg;
+      if (canSeePose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                          chasing_point.x, chasing_point.y, M_PI))
+      {
+        if (result->path.poses.size() < 30) {
+          if (turning_status != TurnSignal::FORWARD) {
+            node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+            node_signal_msg.state = false;
+            signal_pub_->publish(node_signal_msg);
+            turning_status = TurnSignal::FORWARD;
+          }
+        }
+        else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                        chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::FORWARD )
+                                      && (turning_status != TurnSignal::FORWARD))
+        {
+          //RCLCPP_INFO(get_logger(), "Moving forward");
+          node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+          node_signal_msg.state = false;
+          signal_pub_->publish(node_signal_msg);
+          turning_status = TurnSignal::FORWARD;
+        }
+        else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                        chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::TURN_LEFT )
+                                      && (turning_status != TurnSignal::TURN_LEFT))
+        {
+          //RCLCPP_INFO(get_logger(), "Turning left");
+          node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_LEFT;
+          node_signal_msg.state = true;
+          signal_pub_->publish(node_signal_msg);
+          //Make sure don't have special case that turn left & turn right existed at the same time
+          if (turning_status == TurnSignal::TURN_RIGHT) {
+            node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_RIGHT;
+            node_signal_msg.state = false;
+            signal_pub_->publish(node_signal_msg);
+          }
+          turning_status = TurnSignal::TURN_LEFT;
+        }
+        else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                        chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::TURN_RIGHT )
+                                      && (turning_status != TurnSignal::TURN_RIGHT))
+        {
+          //RCLCPP_INFO(get_logger(), "Turning right");
+          node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_RIGHT;
+          node_signal_msg.state = true;
+          signal_pub_->publish(node_signal_msg);
+          //Make sure don't have special case that turn left & turn right existed at the same time
+          if (turning_status == TurnSignal::TURN_LEFT) {
+            node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_LEFT;
+            node_signal_msg.state = false;
+            signal_pub_->publish(node_signal_msg);
+          }
+          turning_status = TurnSignal::TURN_RIGHT;
+        }
+      }
+      else {
+        if (turning_status != TurnSignal::FORWARD) {
+          RCLCPP_INFO(get_logger(), "Can't see chasing pose");
+          node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+          node_signal_msg.state = false;
+          signal_pub_->publish(node_signal_msg);
+          turning_status = TurnSignal::FORWARD;
+        }
+      }
+    }
+
   } catch (nav2_core::InvalidPlanner & ex) {
     exceptionWarning(start, goal->goal, goal->planner_id, ex, result->error_msg);
     result->error_code = ActionToPoseResult::INVALID_PLANNER;
