@@ -71,6 +71,7 @@ private:
   unsigned int current_child_idx_;
   unsigned int number_of_retries_;
   unsigned int retry_count_;
+  bool still_stuck_;
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<NodeSignal>::SharedPtr node_status_pub_;

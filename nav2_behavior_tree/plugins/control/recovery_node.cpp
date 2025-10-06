@@ -24,7 +24,8 @@ RecoveryNode::RecoveryNode(
 : BT::ControlNode::ControlNode(name, conf),
   current_child_idx_(0),
   number_of_retries_(1),
-  retry_count_(0)
+  retry_count_(0),
+  still_stuck_(false)
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
@@ -58,6 +59,12 @@ BT::NodeStatus RecoveryNode::tick()
           // reset node and return success when first child returns success
           // also halt the recovery action as the main action is successful, reset its state
           {
+            if (still_stuck_) {
+              WarningCommand warning_cmd_msg;
+              warning_cmd_msg.cmd = WarningCommand::STOP;
+              warning_cmd_pub_->publish(warning_cmd_msg);
+              still_stuck_ = false;
+            }
             ControlNode::haltChild(1);
             halt();
             return BT::NodeStatus::SUCCESS;
@@ -78,8 +85,11 @@ BT::NodeStatus RecoveryNode::tick()
               WarningCommand warning_cmd_msg;
               warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
               warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
+              warning_cmd_msg.repeat = true;
+              warning_cmd_msg.period_s = 2;
               warning_cmd_pub_->publish(warning_cmd_msg);
-              
+              still_stuck_ = true;
+
               ControlNode::haltChild(0);
               current_child_idx_++;
               break;
