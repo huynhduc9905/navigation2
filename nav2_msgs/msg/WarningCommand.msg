@@ -20,3 +20,5 @@ uint8 cmd
 string path     # PLAY_FILE
 string device   # SET_DEVICE
 uint8  signal   # PLAY_SIGNAL (use one of the enums above)
+bool repeat
+uint8 period_s
