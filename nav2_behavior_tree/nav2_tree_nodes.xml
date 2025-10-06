@@ -401,6 +401,7 @@
 
     <Control ID="RecoveryNode">
       <input_port name="number_of_retries">Number of retries</input_port>
+      <input_port name="use_stuck_signal">Wheter to publish stuck signal of led and audio</input_port>
     </Control>
 
     <Control ID="RoundRobin"/>

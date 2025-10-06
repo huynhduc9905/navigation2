@@ -57,7 +57,8 @@
             </RetryUntilSuccessful>
           </PathLongerOnApproach>
           <RecoveryNode name="FollowPath"
-                        number_of_retries="1">
+                        number_of_retries="1"
+                        use_stuck_signal="false">
             <FollowPath controller_id="{selected_controller}"
                         path="{smooth_path}"
                         error_code_id="{follow_path_error_code}"/>

@@ -25,7 +25,8 @@ RecoveryNode::RecoveryNode(
   current_child_idx_(0),
   number_of_retries_(1),
   retry_count_(0),
-  still_stuck_(false)
+  still_stuck_(false),
+  use_stuck_signal_(true)
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
@@ -36,6 +37,7 @@ RecoveryNode::RecoveryNode(
 BT::NodeStatus RecoveryNode::tick()
 {
   getInput("number_of_retries", number_of_retries_);
+  getInput("use_stuck_signal", use_stuck_signal_);
   const unsigned children_count = children_nodes_.size();
 
   if (children_count != 2) {
@@ -60,10 +62,12 @@ BT::NodeStatus RecoveryNode::tick()
           // also halt the recovery action as the main action is successful, reset its state
           {
             if (still_stuck_) {
-              WarningCommand warning_cmd_msg;
-              warning_cmd_msg.cmd = WarningCommand::STOP;
-              warning_cmd_pub_->publish(warning_cmd_msg);
-              still_stuck_ = false;
+              if (use_stuck_signal_) {
+                WarningCommand warning_cmd_msg;
+                warning_cmd_msg.cmd = WarningCommand::STOP;
+                warning_cmd_pub_->publish(warning_cmd_msg);
+                still_stuck_ = false;
+              }
             }
             ControlNode::haltChild(1);
             halt();
@@ -77,19 +81,20 @@ BT::NodeStatus RecoveryNode::tick()
           {
             if (retry_count_ < number_of_retries_) {
               // halt first child and tick second child in next iteration
-              NodeSignal stuck_signal_msg_;
-              stuck_signal_msg_.signal = NodeSignal::STUCK;
-              stuck_signal_msg_.state = true;
-              node_status_pub_->publish(stuck_signal_msg_);
-              
-              WarningCommand warning_cmd_msg;
-              warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
-              warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
-              warning_cmd_msg.repeat = true;
-              warning_cmd_msg.period_s = 2;
-              warning_cmd_pub_->publish(warning_cmd_msg);
-              still_stuck_ = true;
-
+              if (use_stuck_signal_) {
+                NodeSignal stuck_signal_msg_;
+                stuck_signal_msg_.signal = NodeSignal::STUCK;
+                stuck_signal_msg_.state = true;
+                node_status_pub_->publish(stuck_signal_msg_);
+                
+                WarningCommand warning_cmd_msg;
+                warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
+                warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
+                warning_cmd_msg.repeat = true;
+                warning_cmd_msg.period_s = 2;
+                warning_cmd_pub_->publish(warning_cmd_msg);
+                still_stuck_ = true;
+              }
               ControlNode::haltChild(0);
               current_child_idx_++;
               break;
@@ -122,10 +127,12 @@ BT::NodeStatus RecoveryNode::tick()
         case BT::NodeStatus::SUCCESS:
           {
             // halt second child, increment recovery count, and tick first child in next iteration
-            NodeSignal stuck_signal_msg_;
-            stuck_signal_msg_.signal = NodeSignal::STUCK;
-            stuck_signal_msg_.state = false;
-            node_status_pub_->publish(stuck_signal_msg_);
+            if (use_stuck_signal_) {
+              NodeSignal stuck_signal_msg_;
+              stuck_signal_msg_.signal = NodeSignal::STUCK;
+              stuck_signal_msg_.state = false;
+              node_status_pub_->publish(stuck_signal_msg_);
+            }
             
             ControlNode::haltChild(1);
             retry_count_++;

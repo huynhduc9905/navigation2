@@ -63,7 +63,8 @@ public:
   static BT::PortsList providedPorts()
   {
     return {
-      BT::InputPort<int>("number_of_retries", 1, "Number of retries")
+      BT::InputPort<int>("number_of_retries", 1, "Number of retries"),
+      BT::InputPort<bool>("use_stuck_signal", true, "Use stuck signal"),
     };
   }
 
@@ -72,6 +73,7 @@ private:
   unsigned int number_of_retries_;
   unsigned int retry_count_;
   bool still_stuck_;
+  bool use_stuck_signal_;
 
   rclcpp::Node::SharedPtr node_;
   rclcpp::Publisher<NodeSignal>::SharedPtr node_status_pub_;
