@@ -458,5 +458,11 @@
       <input_port name="goals">Navigation goal</input_port>
     </Decorator>
 
+    <Decorator ID="GoalReachedController">
+      <input_port name="goal">Destination</input_port>
+      <input_port name="robot_base_frame">Robot base frame</input_port>
+      <input_port name="tolerance">Goal reached tolerance</input_port>
+    </Decorator>
+
   </TreeNodesModel>
 </root>
