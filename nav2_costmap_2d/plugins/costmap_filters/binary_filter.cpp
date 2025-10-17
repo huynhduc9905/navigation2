@@ -89,7 +89,7 @@ void BinaryFilter::initializeFilter(
 
   // Create new binary state publisher
   binary_state_pub_ = node->create_publisher<std_msgs::msg::Bool>(
-    binary_state_topic, rclcpp::QoS(10));
+    binary_state_topic, rclcpp::QoS(10).transient_local().reliable());
   binary_state_pub_->on_activate();
 
   // Reset parameters
