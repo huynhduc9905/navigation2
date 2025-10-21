@@ -152,6 +152,12 @@ void Optimizer::reset(bool reset_dynamic_speed_limits)
   noise_generator_.reset(settings_, isHolonomic());
   motion_model_->initialize(settings_.constraints, settings_.model_dt);
 
+  if (settings_.open_loop) {
+    last_command_vel_.linear.x  = 0.0;
+    last_command_vel_.angular.z = 0.0;
+    last_command_vel_.linear.y  = 0.0;
+  }
+
   RCLCPP_INFO(logger_, "Optimizer reset");
 }
 
@@ -176,6 +182,12 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
 
+  if (settings_.open_loop) {
+    last_command_vel_.linear.x = control.twist.linear.x;
+    last_command_vel_.angular.z = control.twist.angular.z;
+    last_command_vel_.linear.y = control.twist.linear.y;
+  }
+  
   if (settings_.shift_control_sequence) {
     shiftControlSequence();
   }
@@ -313,17 +325,17 @@ void Optimizer::updateInitialStateVelocities(models::State & state) const
 {
   const bool open = settings_.open_loop;
 
-  const float vx0 = open ? control_sequence_.vx(0)
-                         : static_cast<float>(state.speed.linear.x);
-  const float wz0 = open ? control_sequence_.wz(0)
-                         : static_cast<float>(state.speed.angular.z);
+  const float vx0 = open ? last_command_vel_.linear.x :
+    static_cast<float>(state.speed.linear.x);
+  const float wz0 = open ? last_command_vel_.angular.z :
+    static_cast<float>(state.speed.angular.z);
 
   state.vx.col(0) = vx0;
   state.wz.col(0) = wz0;
 
   if (isHolonomic()) {
-    const float vy0 = open ? control_sequence_.vy(0)
-                           : static_cast<float>(state.speed.linear.y);
+    const float vy0 = open ? last_command_vel_.linear.y :
+      static_cast<float>(state.speed.linear.y);
     state.vy.col(0) = vy0;
   }
 }
