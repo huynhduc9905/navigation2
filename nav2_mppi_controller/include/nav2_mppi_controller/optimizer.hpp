@@ -278,7 +278,7 @@ protected:
 
   rclcpp::Logger logger_{rclcpp::get_logger("MPPIController")};
 
-  geometry_msgs::msg::Twist last_command_vel_{};
+  geometry_msgs::msg::Twist last_command_vel_;
 };
 
 }  // namespace mppi

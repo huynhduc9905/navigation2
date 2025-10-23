@@ -142,6 +142,10 @@ void Optimizer::reset(bool reset_dynamic_speed_limits)
   control_history_[2] = {0.0f, 0.0f, 0.0f};
   control_history_[3] = {0.0f, 0.0f, 0.0f};
 
+  if (settings_.open_loop) {
+    last_command_vel_ = geometry_msgs::msg::Twist();
+  }
+
   if (reset_dynamic_speed_limits) {
     settings_.constraints = settings_.base_constraints;
   }
@@ -151,12 +155,6 @@ void Optimizer::reset(bool reset_dynamic_speed_limits)
 
   noise_generator_.reset(settings_, isHolonomic());
   motion_model_->initialize(settings_.constraints, settings_.model_dt);
-
-  if (settings_.open_loop) {
-    last_command_vel_.linear.x  = 0.0;
-    last_command_vel_.angular.z = 0.0;
-    last_command_vel_.linear.y  = 0.0;
-  }
 
   RCLCPP_INFO(logger_, "Optimizer reset");
 }
@@ -182,12 +180,8 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
   utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
 
-  if (settings_.open_loop) {
-    last_command_vel_.linear.x = control.twist.linear.x;
-    last_command_vel_.angular.z = control.twist.angular.z;
-    last_command_vel_.linear.y = control.twist.linear.y;
-  }
-  
+  last_command_vel_ = control.twist;
+
   if (settings_.shift_control_sequence) {
     shiftControlSequence();
   }
@@ -231,7 +225,7 @@ void Optimizer::prepare(
   nav2_core::GoalChecker * goal_checker)
 {
   state_.pose = robot_pose;
-  state_.speed = robot_speed;
+  state_.speed = settings_.open_loop ? last_command_vel_ : robot_speed;
   path_ = utils::toTensor(plan);
   costs_.setZero();
   goal_ = goal;
@@ -323,20 +317,11 @@ void Optimizer::updateStateVelocities(
 
 void Optimizer::updateInitialStateVelocities(models::State & state) const
 {
-  const bool open = settings_.open_loop;
-
-  const float vx0 = open ? last_command_vel_.linear.x :
-    static_cast<float>(state.speed.linear.x);
-  const float wz0 = open ? last_command_vel_.angular.z :
-    static_cast<float>(state.speed.angular.z);
-
-  state.vx.col(0) = vx0;
-  state.wz.col(0) = wz0;
+  state.vx.col(0) = static_cast<float>(state.speed.linear.x);
+  state.wz.col(0) = static_cast<float>(state.speed.angular.z);
 
   if (isHolonomic()) {
-    const float vy0 = open ? last_command_vel_.linear.y :
-      static_cast<float>(state.speed.linear.y);
-    state.vy.col(0) = vy0;
+    state.vy.col(0) = static_cast<float>(state.speed.linear.y);
   }
 }
 
