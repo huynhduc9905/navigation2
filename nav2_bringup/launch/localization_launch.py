@@ -42,7 +42,7 @@ def generate_launch_description() -> LaunchDescription:
 
 
     #lifecycle_nodes = ['map_server', 'amcl']
-    lifecycle_nodes = ['map_server']
+    lifecycle_nodes = ['map_server', 'neo_localization']
 
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
@@ -153,6 +153,17 @@ def generate_launch_description() -> LaunchDescription:
             #     remappings=remappings,
             # ),
             Node(
+                package='nav2_neo_localization',
+                executable='neo_localization',
+                name='neo_localization',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings,
+            ),
+            Node(
                 package='nav2_lifecycle_manager',
                 executable='lifecycle_manager',
                 name='lifecycle_manager_localization',
@@ -214,6 +225,13 @@ def generate_launch_description() -> LaunchDescription:
                     #     parameters=[configured_params],
                     #     remappings=remappings,
                     # ),
+                    ComposableNode(
+                        package='nav2_neo_localization',
+                        plugin='nav2_neo_localization::NeoLocalizationNode',
+                        name='neo_localization',
+                        parameters=[configured_params],
+                        remappings=remappings,
+                    ),
                     ComposableNode(
                         package='nav2_lifecycle_manager',
                         plugin='nav2_lifecycle_manager::LifecycleManager',
