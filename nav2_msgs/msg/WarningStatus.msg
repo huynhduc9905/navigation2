@@ -13,3 +13,4 @@ builtin_interfaces/Duration position
 builtin_interfaces/Duration duration
 
 string last_error
+float32 volume

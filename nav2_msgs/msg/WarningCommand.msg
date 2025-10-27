@@ -12,6 +12,7 @@ uint8 OBSTACLE_NEAR=2
 uint8 GOAL_REACHED=3
 uint8 NAVIGATING=4
 uint8 GOAL_FAIL=5
+uint8 SET_VOLUME=6
 
 # Command to execute
 uint8 cmd
@@ -22,3 +23,4 @@ string device   # SET_DEVICE
 uint8  signal   # PLAY_SIGNAL (use one of the enums above)
 bool repeat
 uint8 period_s
+float32 volume
