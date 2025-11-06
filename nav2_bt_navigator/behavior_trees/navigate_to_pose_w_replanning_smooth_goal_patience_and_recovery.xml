@@ -4,7 +4,7 @@
     <PauseResumeController pause_service_name="pause"
                            resume_service_name="resume">
       <RecoveryNode name="NavigateRecovery"
-                    number_of_retries="6">
+                    number_of_retries="10">
         <PipelineSequence name="NavigateWithReplanning">
           <ControllerSelector topic_name="controller_selector"
                               default_controller="FollowPath"
