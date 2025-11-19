@@ -26,6 +26,7 @@
 #include "rclcpp_lifecycle/lifecycle_node.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "nav2_behavior_tree/bt_action_server.hpp"
+#include "nav2_costmap_2d/costmap_2d_ros.hpp"
 
 namespace nav2_core
 {
@@ -128,7 +129,8 @@ public:
     const std::vector<std::string> & plugin_lib_names,
     const FeedbackUtils & feedback_utils,
     nav2_core::NavigatorMuxer * plugin_muxer,
-    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother) = 0;
+    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) = 0;
 
   /**
    * @brief Activation of the navigator's backend BT and actions
@@ -190,7 +192,8 @@ public:
     const std::vector<std::string> & plugin_lib_names,
     const FeedbackUtils & feedback_utils,
     nav2_core::NavigatorMuxer * plugin_muxer,
-    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother) final
+    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) final
   {
     auto node = parent_node.lock();
     logger_ = node->get_logger();
@@ -234,8 +237,9 @@ public:
     blackboard->set("initial_pose_received", false);  // NOLINT
     blackboard->set("number_recoveries", 0);  // NOLINT
     blackboard->set("odom_smoother", odom_smoother);  // NOLINT
+    blackboard->set("costmap_ros", costmap_ros);  // NOLINT
 
-    return configure(parent_node, odom_smoother) && ok;
+    return configure(parent_node, odom_smoother, costmap_ros) && ok;
   }
 
   /**
@@ -356,7 +360,8 @@ protected:
    */
   virtual bool configure(
     rclcpp_lifecycle::LifecycleNode::WeakPtr /*node*/,
-    std::shared_ptr<nav2_util::OdomSmoother>/*odom_smoother*/)
+    std::shared_ptr<nav2_util::OdomSmoother>/*odom_smoother*/,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> /*costmap_ros*/)
   {
     return true;
   }

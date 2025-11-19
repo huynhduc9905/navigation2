@@ -16,6 +16,7 @@ find_package(rclcpp_action REQUIRED)
 find_package(rclcpp_components REQUIRED)
 find_package(rclcpp_lifecycle REQUIRED)
 find_package(tf2_ros REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
 
 nav2_package()
 
@@ -38,11 +39,13 @@ target_link_libraries(${library_name} PUBLIC
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
   tf2_ros::tf2_ros
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 target_link_libraries(${library_name} PRIVATE
   nav2_behavior_tree::nav2_behavior_tree
   rclcpp_components::component
   rclcpp_lifecycle::rclcpp_lifecycle
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 
 add_executable(${executable_name}
@@ -72,12 +75,14 @@ target_link_libraries(nav2_navigate_to_pose_navigator PUBLIC
   ${nav_msgs_TARGETS}
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 target_link_libraries(nav2_navigate_to_pose_navigator PRIVATE
   ament_index_cpp::ament_index_cpp
   nav2_behavior_tree::nav2_behavior_tree
   pluginlib::pluginlib
   rclcpp_lifecycle::rclcpp_lifecycle
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 
 add_library(nav2_navigate_through_poses SHARED src/navigators/navigate_through_poses.cpp)
@@ -94,11 +99,13 @@ target_link_libraries(nav2_navigate_through_poses PUBLIC
   nav2_util::nav2_util_core
   rclcpp::rclcpp
   rclcpp_action::rclcpp_action
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 target_link_libraries(nav2_navigate_through_poses PRIVATE
   ament_index_cpp::ament_index_cpp
   pluginlib::pluginlib
   rclcpp_lifecycle::rclcpp_lifecycle
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 
 pluginlib_export_plugin_description_file(nav2_core navigator_plugins.xml)
@@ -128,6 +135,6 @@ endif()
 
 ament_export_include_directories(include/${PROJECT_NAME})
 ament_export_libraries(${library_name} nav2_navigate_to_pose_navigator nav2_navigate_through_poses)
-ament_export_dependencies(geometry_msgs nav2_core nav2_msgs nav2_util nav_msgs pluginlib rclcpp rclcpp_action tf2_ros)
+ament_export_dependencies(geometry_msgs nav2_core nav2_msgs nav2_util nav_msgs pluginlib rclcpp rclcpp_action tf2_ros nav2_costmap_2d)
 ament_export_targets(export_${library_name})
 ament_package()

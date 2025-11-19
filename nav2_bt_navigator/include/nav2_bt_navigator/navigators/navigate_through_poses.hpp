@@ -28,6 +28,7 @@
 #include "nav2_util/robot_utils.hpp"
 #include "nav2_util/geometry_utils.hpp"
 #include "nav2_util/odometry_utils.hpp"
+#include "nav2_costmap_2d/costmap_2d_ros.hpp"
 
 namespace nav2_bt_navigator
 {
@@ -54,7 +55,8 @@ public:
    */
   bool configure(
     rclcpp_lifecycle::LifecycleNode::WeakPtr node,
-    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother) override;
+    std::shared_ptr<nav2_util::OdomSmoother> odom_smoother,
+    std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros) override;
 
   /**
    * @brief Get action name for this navigator
@@ -114,6 +116,9 @@ protected:
 
   // Odometry smoother object
   std::shared_ptr<nav2_util::OdomSmoother> odom_smoother_;
+
+  // Costmap ROS object
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
 };
 
 }  // namespace nav2_bt_navigator

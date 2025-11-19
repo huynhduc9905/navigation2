@@ -25,10 +25,12 @@ IsPoseOccupiedCondition::IsPoseOccupiedCondition(
   const BT::NodeConfiguration & conf)
 : BT::ConditionNode(condition_name, conf),
   use_footprint_(true), consider_unknown_as_obstacle_(false), cost_threshold_(254),
-  service_name_("global_costmap/get_cost_global_costmap")
+  service_name_("global_costmap/get_cost_global_costmap"),
+  costmap_(nullptr)
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   server_timeout_ = config().blackboard->template get<std::chrono::milliseconds>("server_timeout");
+  costmap_ros_ = config().blackboard->get<std::shared_ptr<nav2_costmap_2d::Costmap2DROS>>("costmap_ros");
 }
 
 void IsPoseOccupiedCondition::initialize()
@@ -38,8 +40,7 @@ void IsPoseOccupiedCondition::initialize()
   getInput<bool>("use_footprint", use_footprint_);
   getInput<bool>("consider_unknown_as_obstacle", consider_unknown_as_obstacle_);
   getInput<std::chrono::milliseconds>("server_timeout", server_timeout_);
-  client_ = std::make_shared<nav2_util::ServiceClient<nav2_msgs::srv::GetCosts>>(service_name_,
-      node_, false /* Does not create and spin an internal executor*/);
+  costmap_ = costmap_ros_->getCostmap();
 }
 
 BT::NodeStatus IsPoseOccupiedCondition::tick()
@@ -50,22 +51,23 @@ BT::NodeStatus IsPoseOccupiedCondition::tick()
   geometry_msgs::msg::PoseStamped pose;
   getInput("pose", pose);
 
-  auto request = std::make_shared<nav2_msgs::srv::GetCosts::Request>();
-  request->use_footprint = use_footprint_;
-  request->poses.push_back(pose);
+  unsigned int cost = nav2_costmap_2d::FREE_SPACE;
 
-  auto response = client_->invoke(request, server_timeout_);
+  unsigned int mx = 0;
+  unsigned int my = 0;
 
-  if(!response->success) {
+  if (costmap_->worldToMap(pose.pose.position.x, pose.pose.position.y, mx, my)) {
+    cost = costmap_->getCost(mx, my);
+  } 
+  else {
     RCLCPP_ERROR(
       node_->get_logger(),
-      "GetCosts service call failed");
+      "Pose (%.2f, %.2f) is out of costmap bounds",
+      pose.pose.position.x, pose.pose.position.y);
     return BT::NodeStatus::FAILURE;
   }
 
-  if((response->costs[0] == 255 && !consider_unknown_as_obstacle_) ||
-    response->costs[0] < cost_threshold_)
-  {
+  if ((cost == 255 && !consider_unknown_as_obstacle_) || cost < cost_threshold_) {
     return BT::NodeStatus::FAILURE;
   } else {
     return BT::NodeStatus::SUCCESS;

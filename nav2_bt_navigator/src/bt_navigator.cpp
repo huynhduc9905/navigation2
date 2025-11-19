@@ -24,6 +24,7 @@
 #include "nav2_util/string_utils.hpp"
 #include "nav2_util/robot_utils.hpp"
 #include "nav2_behavior_tree/bt_utils.hpp"
+#include "lifecycle_msgs/msg/state.hpp"
 
 #include "nav2_behavior_tree/plugins_list.hpp"
 
@@ -51,16 +52,26 @@ BtNavigator::BtNavigator(rclcpp::NodeOptions options)
     this, "odom_topic", rclcpp::ParameterValue(std::string("odom")));
   declare_parameter_if_not_declared(
     this, "filter_duration", rclcpp::ParameterValue(0.3));
+
+  //
+  costmap_ros_ = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
+    "global_costmap", std::string{get_namespace()},
+    get_parameter("use_sim_time").as_bool());
 }
 
 BtNavigator::~BtNavigator()
 {
+  costmap_thread_.reset();
 }
 
 nav2_util::CallbackReturn
 BtNavigator::on_configure(const rclcpp_lifecycle::State & state)
 {
   RCLCPP_INFO(get_logger(), "Configuring");
+
+  costmap_ros_->configure();
+
+  costmap_thread_ = std::make_unique<nav2_util::NodeThread>(costmap_ros_);
 
   tf_ = std::make_shared<tf2_ros::Buffer>(get_clock());
   auto timer_interface = std::make_shared<tf2_ros::CreateTimerROS>(
@@ -128,7 +139,7 @@ BtNavigator::on_configure(const rclcpp_lifecycle::State & state)
       navigators_.push_back(class_loader_.createUniqueInstance(navigator_type));
       if (!navigators_.back()->on_configure(
           node, plugin_lib_names, feedback_utils,
-          &plugin_muxer_, odom_smoother_))
+          &plugin_muxer_, odom_smoother_, costmap_ros_))
       {
         return nav2_util::CallbackReturn::FAILURE;
       }
@@ -154,7 +165,10 @@ BtNavigator::on_activate(const rclcpp_lifecycle::State & state)
       return nav2_util::CallbackReturn::FAILURE;
     }
   }
-
+  const auto costmap_ros_state = costmap_ros_->activate();
+  if (costmap_ros_state.id() != lifecycle_msgs::msg::State::PRIMARY_STATE_ACTIVE) {
+    return nav2_util::CallbackReturn::FAILURE;
+  }
   // create bond connection
   createBond();
 
@@ -170,7 +184,7 @@ BtNavigator::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
       return nav2_util::CallbackReturn::FAILURE;
     }
   }
-
+  costmap_ros_->deactivate();
   // destroy bond connection
   destroyBond();
 
@@ -185,12 +199,14 @@ BtNavigator::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
   // Reset the listener before the buffer
   tf_listener_.reset();
   tf_.reset();
+  costmap_thread_.reset();
 
   for (size_t i = 0; i != navigators_.size(); i++) {
     if (!navigators_[i]->on_cleanup()) {
       return nav2_util::CallbackReturn::FAILURE;
     }
   }
+  costmap_ros_->cleanup();
 
   navigators_.clear();
   RCLCPP_INFO(get_logger(), "Completed Cleaning up");

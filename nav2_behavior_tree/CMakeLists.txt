@@ -19,6 +19,7 @@ find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(tf2_geometry_msgs REQUIRED)
 find_package(nav2_ros_common REQUIRED)
+find_package(nav2_costmap_2d REQUIRED)
 
 
 nav2_package()
@@ -47,6 +48,7 @@ target_link_libraries(${library_name} PUBLIC
   tf2_ros::tf2_ros
   tf2_geometry_msgs::tf2_geometry_msgs
   nav2_ros_common::nav2_ros_common
+  nav2_costmap_2d::nav2_costmap_2d_core
 )
 
 add_library(nav2_compute_path_to_pose_action_bt_node SHARED plugins/action/compute_path_to_pose_action.cpp)
@@ -280,6 +282,7 @@ foreach(bt_plugin ${plugin_libs})
     ${std_msgs_TARGETS}
     ${std_srvs_TARGETS}
     nav2_ros_common::nav2_ros_common
+    nav2_costmap_2d::nav2_costmap_2d_core
   )
   target_compile_definitions(${bt_plugin} PRIVATE BT_PLUGIN_EXPORT)
 endforeach()
@@ -350,6 +353,7 @@ ament_export_dependencies(
   tf2_ros
   tf2_geometry_msgs
   nav2_ros_common
+  nav2_costmap_2d
 )
 ament_export_targets(${library_name})
 

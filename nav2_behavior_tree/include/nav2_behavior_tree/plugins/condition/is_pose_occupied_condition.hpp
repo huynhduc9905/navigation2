@@ -25,6 +25,7 @@
 #include "nav2_util/service_client.hpp"
 #include "nav2_behavior_tree/bt_utils.hpp"
 #include "nav2_behavior_tree/json_utils.hpp"
+#include "nav2_costmap_2d/costmap_2d_ros.hpp"
 
 
 namespace nav2_behavior_tree
@@ -85,7 +86,7 @@ public:
 
 private:
   rclcpp::Node::SharedPtr node_;
-  nav2_util::ServiceClient<nav2_msgs::srv::GetCosts>::SharedPtr client_;
+  // nav2_util::ServiceClient<nav2_msgs::srv::GetCosts>::SharedPtr client_;
   // The timeout value while waiting for a response from the
   // get cost service
   std::chrono::milliseconds server_timeout_;
@@ -93,6 +94,8 @@ private:
   bool consider_unknown_as_obstacle_;
   double cost_threshold_;
   std::string service_name_;
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
+  nav2_costmap_2d::Costmap2D * costmap_;
 };
 
 }  // namespace nav2_behavior_tree

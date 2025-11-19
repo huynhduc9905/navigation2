@@ -28,6 +28,7 @@
 #include "tf2_ros/create_timer_ros.h"
 #include "nav2_core/behavior_tree_navigator.hpp"
 #include "pluginlib/class_loader.hpp"
+#include "nav2_costmap_2d/costmap_2d_ros.hpp"
 
 namespace nav2_bt_navigator
 {
@@ -103,6 +104,9 @@ protected:
   // Spinning transform that can be used by the node
   std::shared_ptr<tf2_ros::Buffer> tf_;
   std::shared_ptr<tf2_ros::TransformListener> tf_listener_;
+
+  std::unique_ptr<nav2_util::NodeThread> costmap_thread_;
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros_;
 };
 
 }  // namespace nav2_bt_navigator

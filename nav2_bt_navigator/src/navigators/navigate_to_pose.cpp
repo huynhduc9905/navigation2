@@ -24,7 +24,8 @@ namespace nav2_bt_navigator
 bool
 NavigateToPoseNavigator::configure(
   rclcpp_lifecycle::LifecycleNode::WeakPtr parent_node,
-  std::shared_ptr<nav2_util::OdomSmoother> odom_smoother)
+  std::shared_ptr<nav2_util::OdomSmoother> odom_smoother,
+  std::shared_ptr<nav2_costmap_2d::Costmap2DROS> costmap_ros)
 {
   start_time_ = rclcpp::Time(0);
   auto node = parent_node.lock();
@@ -43,6 +44,9 @@ NavigateToPoseNavigator::configure(
 
   // Odometry smoother object for getting current speed
   odom_smoother_ = odom_smoother;
+
+  // Costmap ROS object for getting costmap information
+  costmap_ros_ = costmap_ros;
 
   self_client_ = rclcpp_action::create_client<ActionT>(node, getName());
 
