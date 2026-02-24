@@ -190,9 +190,9 @@ void BinaryFilter::process(
   unsigned int mask_robot_i, mask_robot_j;
   if (!worldToMask(filter_mask_, mask_pose.x, mask_pose.y, mask_robot_i, mask_robot_j)) {
     // Robot went out of mask range. Set "false" state by-default
-    RCLCPP_WARN(
-      logger_,
-      "BinaryFilter: Robot is outside of filter mask. Resetting binary state to default.");
+    // RCLCPP_WARN(
+    //   logger_,
+    //   "BinaryFilter: Robot is outside of filter mask. Resetting binary state to default.");
     changeState(default_state_);
     return;
   }
@@ -249,9 +249,9 @@ void BinaryFilter::changeState(const bool state)
 {
   binary_state_ = state;
   if (state) {
-    RCLCPP_INFO(logger_, "BinaryFilter: Switched on");
+    //RCLCPP_INFO(logger_, "BinaryFilter: Switched on");
   } else {
-    RCLCPP_INFO(logger_, "BinaryFilter: Switched off");
+    //RCLCPP_INFO(logger_, "BinaryFilter: Switched off");
   }
 
   // Forming and publishing new BinaryState message
