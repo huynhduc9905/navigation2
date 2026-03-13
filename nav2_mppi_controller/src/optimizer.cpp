@@ -177,7 +177,7 @@ geometry_msgs::msg::TwistStamped Optimizer::evalControl(
     optimize();
   } while (fallback(critics_data_.fail_flag));
 
-  utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
+  // utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
   auto control = getControlFromSequenceAsTwist(plan.header.stamp);
 
   last_command_vel_ = control.twist;
@@ -227,7 +227,8 @@ void Optimizer::prepare(
   state_.pose = robot_pose;
   state_.speed = settings_.open_loop ? last_command_vel_ : robot_speed;
   path_ = utils::toTensor(plan);
-  costs_.setZero();
+  // costs_.setZero();
+  costs_.setZero(settings_.batch_size);
   goal_ = goal;
 
   critics_data_.fail_flag = false;
@@ -481,6 +482,8 @@ void Optimizer::updateControlSequence()
   if (is_holo) {
     control_sequence_.vy = state_.cvy.transpose().matrix() * softmax_mat;
   }
+
+  utils::savitskyGolayFilter(control_sequence_, control_history_, settings_);
 
   applyControlSequenceConstraints();
 }
