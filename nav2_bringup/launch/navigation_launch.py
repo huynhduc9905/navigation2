@@ -52,6 +52,10 @@ def generate_launch_description() -> LaunchDescription:
         'docking_server',
     ]
 
+    virtual_lifecycle_nodes = [
+        'planner_server',   # (this is /virtual/planner_server)
+    ]
+
     # Map fully qualified names to relative ones so the node's namespace can be prepended.
     remappings = [('/tf', 'tf'), ('/tf_static', 'tf_static')]
 
@@ -149,6 +153,18 @@ def generate_launch_description() -> LaunchDescription:
             Node(
                 package='nav2_planner',
                 executable='planner_server',
+                name='planner_server',
+                output='screen',
+                respawn=use_respawn,
+                respawn_delay=2.0,
+                parameters=[configured_params],
+                arguments=['--ros-args', '--log-level', log_level],
+                remappings=remappings,
+            ),
+            Node(
+                package='nav2_planner',
+                executable='planner_server',
+                namespace='virtual',
                 name='planner_server',
                 output='screen',
                 respawn=use_respawn,
@@ -272,6 +288,24 @@ def generate_launch_description() -> LaunchDescription:
                         name='planner_server',
                         parameters=[configured_params],
                         remappings=remappings,
+                    ),
+                    ComposableNode(
+                        package='nav2_planner',
+                        plugin='nav2_planner::PlannerServer',
+                        namespace='virtual',
+                        name='planner_server',
+                        parameters=[configured_params],
+                        remappings=remappings,
+                    ),
+
+                    ComposableNode(
+                        package='nav2_lifecycle_manager',
+                        plugin='nav2_lifecycle_manager::LifecycleManager',
+                        namespace='virtual',
+                        name='lifecycle_manager_navigation',
+                        parameters=[
+                            {'autostart': autostart, 'node_names': virtual_lifecycle_nodes}
+                        ],
                     ),
                     # ComposableNode(
                     #     package='nav2_route',
