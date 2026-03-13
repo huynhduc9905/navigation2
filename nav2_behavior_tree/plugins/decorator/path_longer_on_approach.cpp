@@ -30,7 +30,7 @@ PathLongerOnApproach::PathLongerOnApproach(
 {
   node_ = config().blackboard->get<rclcpp::Node::SharedPtr>("node");
   rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
-  client_ = std::make_shared<nav2_util::ServiceClient<nav2_msgs::srv::IsPathValid>>("is_path_valid",
+  client_ = std::make_shared<nav2_util::ServiceClient<nav2_msgs::srv::IsPathValid>>("/virtual/is_path_valid",
       node_, false /* Does not create and spin an internal executor*/);
   signal_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
   warning_cmd_pub_ = rclcpp::create_publisher<WarningCommand>(node_, "/audio/warn/command", 10);
