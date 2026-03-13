@@ -12,15 +12,27 @@
           <PlannerSelector topic_name="planner_selector"
                            default_planner="GridBased"
                            selected_planner="{selected_planner}"/>
-          <SpeedController min_rate="2.0"
-                           max_rate="2.0"
-                           min_speed="0.0"
-                           max_speed="0.3">
+          <RateController hz="2.0">
             <RecoveryNode name="ComputePathToPose"
                           number_of_retries="1">
               <Sequence>
                 <ComputePathToPose goal="{goal}"
                                    planner_id="{selected_planner}"
+                                   server_name="/virtual/compute_path_to_pose"
+                                   path="{virtual_path}"
+                                   error_code_id="{compute_virtual_path_error_code}"/>
+              </Sequence>
+              <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+                                  service_name="/virtual/global_costmap/clear_entirely_global_costmap"/>
+            </RecoveryNode>
+          </RateController>
+          <RateController hz="0.5">
+            <RecoveryNode name="ComputePathToPose"
+                          number_of_retries="1">
+              <Sequence>
+                <ComputePathToPose goal="{goal}"
+                                   planner_id="{selected_planner}"
+                                   server_name="/compute_path_to_pose"
                                    path="{path}"
                                    error_code_id="{compute_path_error_code}"/>
                 <SmoothPath smoother_id="simple_smoother"
@@ -32,7 +44,7 @@
               <ClearEntireCostmap name="ClearGlobalCostmap-Context"
                                   service_name="global_costmap/clear_entirely_global_costmap"/>
             </RecoveryNode>
-          </SpeedController>
+          </RateController>
           <ReactiveSequence name="MonitorAndFollowPath">
             <RecoveryNode name="CheckGoalOccupied"
                           number_of_retries="30">
@@ -45,11 +57,13 @@
                 <CancelControl name="ControlCancel"/>
                 <ClearEntireCostmap name="ClearGlobalCostmap-Context"
                                     service_name="global_costmap/clear_entirely_global_costmap"/>
+                <ClearEntireCostmap name="ClearGlobalCostmap-Context"
+                                    service_name="/virtual/global_costmap/clear_entirely_global_costmap"/>
                 <Wait wait_duration="1.0"/>
               </SequenceWithMemory>
             </RecoveryNode>
-            <PathLongerOnApproach path="{path}"
-                                  prox_len="1000000"
+            <PathLongerOnApproach path="{virtual_path}"
+                                  prox_len="10000000"
                                   length_factor="1.01">
               <RetryUntilSuccessful num_attempts="1">
                 <SequenceWithMemory name="CancelingControlAndWait">
