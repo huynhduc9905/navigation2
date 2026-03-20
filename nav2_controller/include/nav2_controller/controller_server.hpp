@@ -36,9 +36,16 @@
 #include "nav2_util/twist_publisher.hpp"
 #include "pluginlib/class_loader.hpp"
 #include "pluginlib/class_list_macros.hpp"
+#include "nav2_msgs/msg/node_signal.hpp"
 
 namespace nav2_controller
 {
+
+enum class TurnSignal : uint8_t {
+  FORWARD = nav2_msgs::msg::NodeSignal::NAV_RUNNING, 
+  TURN_LEFT = nav2_msgs::msg::NodeSignal::TURN_LEFT, 
+  TURN_RIGHT = nav2_msgs::msg::NodeSignal::TURN_RIGHT
+};
 
 class ProgressChecker;
 /**
@@ -217,6 +224,45 @@ protected:
     return twist_thresh;
   }
 
+  void detectTurningSignal();
+
+  inline bool canSeePose(float x1, float y1, float yaw, float x2, float y2, float threshold = M_PI)
+  {
+    float dx = x2 - x1;
+    float dy = y2 - y1;
+    float goal_heading = std::atan2(dy, dx);
+    
+    float diff = goal_heading - yaw;
+    while (diff > M_PI)  diff -= 2.0 * M_PI;
+    while (diff < -M_PI) diff += 2.0 * M_PI;
+
+    return std::fabs(diff) <= (threshold / 2.0f);
+  }
+
+  inline int sideToYaw(float x1, float y1, float yaw, float x2, float y2, float eps = 1e-6f) 
+  {
+    const float dx = x2 - x1;
+    const float dy = y2 - y1;
+    const float c = std::cos(yaw), s = std::sin(yaw);
+    const float crossz = c * dy - s * dx;   // + => CCW (LEFT), - => CW (RIGHT)
+    if (crossz >  eps) return +1;
+    if (crossz < -eps) return -1;
+    return 0;
+  }
+
+  inline TurnSignal decideTurnSignalFromPose(float x1, float y1, float yaw,
+                                            float x2, float y2,
+                                            float fov_threshold = M_PI/3.0f)
+  {
+    if (canSeePose(x1, y1, yaw, x2, y2, fov_threshold)) {
+      return TurnSignal::FORWARD;  // within FOV -> don't check side
+    }
+    const int side = sideToYaw(x1, y1, yaw, x2, y2);
+    if (side > 0)  return TurnSignal::TURN_LEFT;
+    if (side < 0)  return TurnSignal::TURN_RIGHT;
+    return TurnSignal::FORWARD;    // exactly on heading line
+  }
+
   /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
@@ -236,6 +282,7 @@ protected:
   std::unique_ptr<nav_2d_utils::OdomSubscriber> odom_sub_;
   std::unique_ptr<nav2_util::TwistPublisher> vel_publisher_;
   rclcpp::Subscription<nav2_msgs::msg::SpeedLimit>::SharedPtr speed_limit_sub_;
+  rclcpp_lifecycle::LifecyclePublisher<nav2_msgs::msg::NodeSignal>::SharedPtr signal_pub_;
 
   // Progress Checker Plugin
   pluginlib::ClassLoader<nav2_core::ProgressChecker> progress_checker_loader_;
@@ -282,6 +329,17 @@ protected:
 
   // Current path container
   nav_msgs::msg::Path current_path_;
+
+  // TF components
+  std::shared_ptr<tf2_ros::TransformListener> tf_listener_{nullptr};
+  std::shared_ptr<tf2_ros::Buffer> tf_buffer_;
+
+  // Turning status
+  TurnSignal turning_status;
+
+  // Turning components
+  int turning_look_ahead_range_;
+  float turning_consider_percent_;
 
 private:
   /**

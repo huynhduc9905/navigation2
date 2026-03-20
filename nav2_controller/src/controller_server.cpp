@@ -45,7 +45,10 @@ ControllerServer::ControllerServer(const rclcpp::NodeOptions & options)
   lp_loader_("nav2_core", "nav2_core::Controller"),
   default_ids_{"FollowPath"},
   default_types_{"dwb_core::DWBLocalPlanner"},
-  costmap_update_timeout_(300ms)
+  costmap_update_timeout_(300ms),
+  turning_status(TurnSignal::FORWARD),
+  turning_look_ahead_range_(120),
+  turning_consider_percent_(6.0)
 {
   RCLCPP_INFO(get_logger(), "Creating controller server");
 
@@ -64,6 +67,8 @@ ControllerServer::ControllerServer(const rclcpp::NodeOptions & options)
   declare_parameter("use_realtime_priority", rclcpp::ParameterValue(false));
   declare_parameter("publish_zero_velocity", rclcpp::ParameterValue(true));
   declare_parameter("costmap_update_timeout", 0.30);  // 300ms
+  declare_parameter("turning_look_ahead_range", 120);
+  declare_parameter("turning_consider_percent", 6.0);
 
   // The costmap node is used in the implementation of the controller
   costmap_ros_ = std::make_shared<nav2_costmap_2d::Costmap2DROS>(
@@ -130,6 +135,8 @@ ControllerServer::on_configure(const rclcpp_lifecycle::State & state)
   get_parameter("failure_tolerance", failure_tolerance_);
   get_parameter("use_realtime_priority", use_realtime_priority_);
   get_parameter("publish_zero_velocity", publish_zero_velocity_);
+  get_parameter("turning_look_ahead_range", turning_look_ahead_range_);
+  get_parameter("turning_consider_percent", turning_consider_percent_);
 
   costmap_ros_->configure();
   // Launch a thread to run the costmap node
@@ -221,6 +228,7 @@ ControllerServer::on_configure(const rclcpp_lifecycle::State & state)
 
   odom_sub_ = std::make_unique<nav_2d_utils::OdomSubscriber>(node);
   vel_publisher_ = std::make_unique<nav2_util::TwistPublisher>(node, "cmd_vel", 1);
+  signal_pub_ = create_publisher<nav2_msgs::msg::NodeSignal>("/node_signal", rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local());
 
   double costmap_update_timeout_dbl;
   get_parameter("costmap_update_timeout", costmap_update_timeout_dbl);
@@ -242,6 +250,10 @@ ControllerServer::on_configure(const rclcpp_lifecycle::State & state)
     on_cleanup(state);
     return nav2_util::CallbackReturn::FAILURE;
   }
+
+  // Create the transform-related objects
+  tf_buffer_ = std::make_shared<tf2_ros::Buffer>(get_clock());
+  tf_listener_ = std::make_shared<tf2_ros::TransformListener>(*tf_buffer_);
 
   // Set subscription to the speed limiting topic
   speed_limit_sub_ = create_subscription<nav2_msgs::msg::SpeedLimit>(
@@ -265,6 +277,7 @@ ControllerServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
     it->second->activate();
   }
   vel_publisher_->on_activate();
+  signal_pub_->on_activate();
   action_server_->activate();
 
   auto node = shared_from_this();
@@ -300,6 +313,7 @@ ControllerServer::on_deactivate(const rclcpp_lifecycle::State & /*state*/)
 
   publishZeroVelocity();
   vel_publisher_->on_deactivate();
+  signal_pub_->on_deactivate();
 
   remove_on_set_parameters_callback(dyn_params_handler_.get());
   dyn_params_handler_.reset();
@@ -326,13 +340,15 @@ ControllerServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
   progress_checkers_.clear();
 
   costmap_ros_->cleanup();
-
+  tf_listener_.reset();
+  tf_buffer_.reset();
 
   // Release any allocated resources
   action_server_.reset();
   odom_sub_.reset();
   costmap_thread_.reset();
   vel_publisher_.reset();
+  signal_pub_.reset();
   speed_limit_sub_.reset();
 
   return nav2_util::CallbackReturn::SUCCESS;
@@ -497,6 +513,8 @@ void ControllerServer::computeControl()
       updateGlobalPath();
 
       computeAndPublishVelocity();
+
+      detectTurningSignal();
 
       if (isGoalReached()) {
         RCLCPP_INFO(get_logger(), "Reached the goal!");
@@ -699,6 +717,110 @@ void ControllerServer::computeAndPublishVelocity()
   feedback->distance_to_goal = nav2_util::geometry_utils::calculate_path_length(current_path_,
       closest_pose_idx);
   action_server_->publish_feedback(feedback);
+}
+
+void ControllerServer::detectTurningSignal() 
+{
+  nav_msgs::msg::Path & current_path = current_path_;
+  geometry_msgs::msg::PoseStamped current_pose;
+  unsigned int closest_point_index = 0;
+
+  if (nav2_util::getCurrentPose(current_pose, *tf_buffer_, "map", "base_link")) {
+    float current_distance = std::numeric_limits<float>::max();
+    float closest_distance = current_distance;
+    geometry_msgs::msg::Point current_point = current_pose.pose.position;
+    for (unsigned int i = 0; i < current_path.poses.size(); ++i) {
+      geometry_msgs::msg::Point path_point = current_path.poses[i].pose.position;
+
+      current_distance = nav2_util::geometry_utils::euclidean_distance(current_point, path_point);
+
+      if (current_distance < closest_distance) {
+        closest_point_index = i;
+        closest_distance = current_distance;
+      }
+    }
+    
+    float chasing_index = closest_point_index + turning_look_ahead_range_;
+    geometry_msgs::msg::Point chasing_point;
+    if (chasing_index >= (current_path.poses.size() - 1)) {
+      chasing_point = current_path.poses.back().pose.position;
+    }
+    else {
+      chasing_point = current_path.poses[chasing_index].pose.position;
+    }
+    
+    geometry_msgs::msg::Quaternion q_msg = current_pose.pose.orientation;
+    tf2::Quaternion q;
+    tf2::fromMsg(q_msg, q);
+    double roll = 0.0, pitch = 0.0, yaw = 0.0;
+    tf2::Matrix3x3(q).getRPY(roll, pitch, yaw);
+    float current_pose_yaw = yaw;
+    nav2_msgs::msg::NodeSignal node_signal_msg;
+    if (canSeePose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                        chasing_point.x, chasing_point.y, M_PI))
+    {
+      if (current_path.poses.size() < 20) {
+        if (turning_status != TurnSignal::FORWARD) {
+          node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+          node_signal_msg.state = false;
+          signal_pub_->publish(node_signal_msg);
+          turning_status = TurnSignal::FORWARD;
+        }
+      }
+      else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                      chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::FORWARD )
+                                    && (turning_status != TurnSignal::FORWARD))
+      {
+        //RCLCPP_INFO(get_logger(), "Moving forward");
+        node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+        node_signal_msg.state = false;
+        signal_pub_->publish(node_signal_msg);
+        turning_status = TurnSignal::FORWARD;
+      }
+      else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                      chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::TURN_LEFT )
+                                    && (turning_status != TurnSignal::TURN_LEFT))
+      {
+        //RCLCPP_INFO(get_logger(), "Turning left");
+        node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_LEFT;
+        node_signal_msg.state = true;
+        signal_pub_->publish(node_signal_msg);
+        //Make sure don't have special case that turn left & turn right existed at the same time
+        if (turning_status == TurnSignal::TURN_RIGHT) {
+          node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_RIGHT;
+          node_signal_msg.state = false;
+          signal_pub_->publish(node_signal_msg);
+        }
+        turning_status = TurnSignal::TURN_LEFT;
+      }
+      else if ((decideTurnSignalFromPose(current_pose.pose.position.x, current_pose.pose.position.y, current_pose_yaw,
+                                      chasing_point.x, chasing_point.y, M_PI / turning_consider_percent_) == TurnSignal::TURN_RIGHT )
+                                    && (turning_status != TurnSignal::TURN_RIGHT))
+      {
+        //RCLCPP_INFO(get_logger(), "Turning right");
+        node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_RIGHT;
+        node_signal_msg.state = true;
+        signal_pub_->publish(node_signal_msg);
+        //Make sure don't have special case that turn left & turn right existed at the same time
+        if (turning_status == TurnSignal::TURN_LEFT) {
+          node_signal_msg.signal = nav2_msgs::msg::NodeSignal::TURN_LEFT;
+          node_signal_msg.state = false;
+          signal_pub_->publish(node_signal_msg);
+        }
+        turning_status = TurnSignal::TURN_RIGHT;
+      }
+    }
+    else {
+      if (turning_status != TurnSignal::FORWARD) {
+        RCLCPP_INFO(get_logger(), "Can't see chasing pose");
+        node_signal_msg.signal = static_cast<uint8_t>(turning_status);
+        node_signal_msg.state = false;
+        signal_pub_->publish(node_signal_msg);
+        turning_status = TurnSignal::FORWARD;
+      }
+    }
+  }
+
 }
 
 void ControllerServer::updateGlobalPath()
