@@ -15,8 +15,6 @@
 #ifndef NAV2_PLANNER__PLANNER_SERVER_HPP_
 #define NAV2_PLANNER__PLANNER_SERVER_HPP_
 
-//#define CHASING_POSE_DEBUG
-
 #include <chrono>
 #include <string>
 #include <memory>
@@ -31,7 +29,6 @@
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
 #include "nav2_msgs/action/compute_path_through_poses.hpp"
 #include "nav2_msgs/msg/costmap.hpp"
-#include "nav2_msgs/msg/node_signal.hpp"
 #include "nav2_util/robot_utils.hpp"
 #include "nav2_util/simple_action_server.hpp"
 #include "nav2_util/service_server.hpp"
@@ -44,18 +41,9 @@
 #include "nav2_msgs/srv/is_path_valid.hpp"
 #include "nav2_costmap_2d/footprint_collision_checker.hpp"
 #include "nav2_core/planner_exceptions.hpp"
-#include "tf2/LinearMath/Quaternion.hpp"
-#include "tf2/LinearMath/Matrix3x3.hpp"
 
 namespace nav2_planner
 {
-
-enum class TurnSignal : uint8_t {
-  FORWARD = nav2_msgs::msg::NodeSignal::NAV_RUNNING, 
-  TURN_LEFT = nav2_msgs::msg::NodeSignal::TURN_LEFT, 
-  TURN_RIGHT = nav2_msgs::msg::NodeSignal::TURN_RIGHT
-};
-
 /**
  * @class nav2_planner::PlannerServer
  * @brief An action server implements the behavior tree's ComputePathToPose
@@ -234,44 +222,6 @@ protected:
     const std::exception & ex,
     std::string & msg);
 
-  inline bool canSeePose(float x1, float y1, float yaw, float x2, float y2, float threshold = M_PI)
-  {
-    float dx = x2 - x1;
-    float dy = y2 - y1;
-    float goal_heading = std::atan2(dy, dx);
-    
-    float diff = goal_heading - yaw;
-    while (diff > M_PI)  diff -= 2.0 * M_PI;
-    while (diff < -M_PI) diff += 2.0 * M_PI;
-
-    return std::fabs(diff) <= (threshold / 2.0f);
-  }
-
-  inline int sideToYaw(float x1, float y1, float yaw, float x2, float y2, float eps = 1e-6f) 
-  {
-    const float dx = x2 - x1;
-    const float dy = y2 - y1;
-    const float c = std::cos(yaw), s = std::sin(yaw);
-    const float crossz = c * dy - s * dx;   // + => CCW (LEFT), - => CW (RIGHT)
-    if (crossz >  eps) return +1;
-    if (crossz < -eps) return -1;
-    return 0;
-  }
-
-  // Wrapper that uses your canSeePose(): if visible -> NONE; else -> LEFT/RIGHT
-  inline TurnSignal decideTurnSignalFromPose(float x1, float y1, float yaw,
-                                            float x2, float y2,
-                                            float fov_threshold = M_PI/3.0f)
-  {
-    if (canSeePose(x1, y1, yaw, x2, y2, fov_threshold)) {
-      return TurnSignal::FORWARD;  // within FOV -> don't check side
-    }
-    const int side = sideToYaw(x1, y1, yaw, x2, y2);
-    if (side > 0)  return TurnSignal::TURN_LEFT;
-    if (side < 0)  return TurnSignal::TURN_RIGHT;
-    return TurnSignal::FORWARD;    // exactly on heading line
-  }
-
   /**
    * @brief Callback executed when a parameter change is detected
    * @param event ParameterEvent message
@@ -311,25 +261,9 @@ protected:
   // Publishers for the path
   rclcpp_lifecycle::LifecyclePublisher<nav_msgs::msg::Path>::SharedPtr plan_publisher_;
 
-  // Publishers for the turning signal
-  rclcpp_lifecycle::LifecyclePublisher<nav2_msgs::msg::NodeSignal>::SharedPtr signal_pub_;
-
-  // Publisher for debugging chasing pose
-  #ifdef CHASING_POSE_DEBUG
-  rclcpp_lifecycle::LifecyclePublisher<geometry_msgs::msg::PoseStamped>::SharedPtr chasing_pose_pub_;
-  #endif
-
   // Service to determine if the path is valid
   nav2_util::ServiceServer<nav2_msgs::srv::IsPathValid,
     std::shared_ptr<nav2_util::LifecycleNode>>::SharedPtr is_path_valid_service_;
-
-  // Turning status
-  TurnSignal turning_status;
-
-  // Turning components
-  int turning_look_ahead_range_;
-  float turning_consider_percent_;
-
 };
 
 }  // namespace nav2_planner
