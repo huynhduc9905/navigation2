@@ -20,7 +20,8 @@
                                    planner_id="{selected_planner}"
                                    server_name="/virtual/compute_path_to_pose"
                                    path="{virtual_path}"
-                                   error_code_id="{compute_virtual_path_error_code}"/>
+                                   error_code_id="{compute_virtual_path_error_code}"
+                                   use_stuck_signal="true"/>
               </Sequence>
               <ClearEntireCostmap name="ClearGlobalCostmap-Context"
                                   service_name="/virtual/global_costmap/clear_entirely_global_costmap"/>
@@ -51,7 +52,8 @@
               <Inverter>
                 <IsPoseOccupied pose="{goal}"
                                 cost_threshold="200"
-                                use_footprint="false"/>
+                                use_footprint="false"
+                                use_stuck_signal="true"/>
               </Inverter>
               <SequenceWithMemory name="CancelingControlAndWait">
                 <CancelControl name="ControlCancel"/>
@@ -73,8 +75,7 @@
               </RetryUntilSuccessful>
             </PathLongerOnApproach>
             <RecoveryNode name="FollowPath"
-                          number_of_retries="1"
-                          use_stuck_signal="false">
+                          number_of_retries="1">
               <FollowPath controller_id="{selected_controller}"
                           path="{smooth_path}"
                           error_code_id="{follow_path_error_code}"/>

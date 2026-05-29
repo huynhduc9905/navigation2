@@ -20,6 +20,9 @@
 #include "nav2_msgs/action/compute_path_to_pose.hpp"
 #include "nav_msgs/msg/path.h"
 #include "nav2_behavior_tree/bt_action_node.hpp"
+#include "geometry_msgs/msg/pose_stamped.hpp"
+#include "nav2_msgs/msg/node_signal.hpp"
+#include "nav2_msgs/msg/warning_command.hpp"
 
 namespace nav2_behavior_tree
 {
@@ -33,7 +36,14 @@ class ComputePathToPoseAction : public BtActionNode<nav2_msgs::action::ComputePa
 {
   using Action = nav2_msgs::action::ComputePathToPose;
   using ActionResult = Action::Result;
-
+  using NodeSignal = nav2_msgs::msg::NodeSignal;
+  using WarningCommand = nav2_msgs::msg::WarningCommand;
+private:
+  geometry_msgs::msg::PoseStamped current_goal_;
+  bool use_stuck_signal_;
+  bool still_stuck_;
+  rclcpp::Publisher<NodeSignal>::SharedPtr node_status_pub_;
+  rclcpp::Publisher<WarningCommand>::SharedPtr warning_cmd_pub_;
 public:
   /**
    * @brief A constructor for nav2_behavior_tree::ComputePathToPoseAction
@@ -45,6 +55,8 @@ public:
     const std::string & xml_tag_name,
     const std::string & action_name,
     const BT::NodeConfiguration & conf);
+
+  void sendSignals(bool isStuck, bool newGoal);
 
   /**
    * @brief Function to perform some user-defined operation on tick
@@ -99,6 +111,7 @@ public:
         BT::InputPort<std::string>(
           "planner_id", "",
           "Mapped name to the planner plugin type to use"),
+        BT::InputPort<bool>("use_stuck_signal", false, "Use stuck signal"),
         BT::OutputPort<nav_msgs::msg::Path>("path", "Path created by ComputePathToPose node"),
         BT::OutputPort<ActionResult::_error_code_type>(
           "error_code_id", "The compute path to pose error code"),

@@ -25,6 +25,8 @@
 #include "nav2_util/service_client.hpp"
 #include "nav2_behavior_tree/bt_utils.hpp"
 #include "nav2_behavior_tree/json_utils.hpp"
+#include "nav2_msgs/msg/node_signal.hpp"
+#include "nav2_msgs/msg/warning_command.hpp"
 
 
 namespace nav2_behavior_tree
@@ -36,6 +38,8 @@ namespace nav2_behavior_tree
  */
 class IsPoseOccupiedCondition : public BT::ConditionNode
 {
+  using NodeSignal = nav2_msgs::msg::NodeSignal;
+  using WarningCommand = nav2_msgs::msg::WarningCommand;
 public:
   /**
    * @brief A constructor for nav2_behavior_tree::IsPoseOccupiedCondition
@@ -47,6 +51,8 @@ public:
     const BT::NodeConfiguration & conf);
 
   IsPoseOccupiedCondition() = delete;
+
+  void sendSignals(bool isStuck, bool newPose);
 
   /**
    * @brief The main override required by a BT action
@@ -86,6 +92,7 @@ public:
         "consider_unknown_as_obstacle", false,
         "Whether to consider unknown cost as obstacle"),
       BT::InputPort<std::chrono::milliseconds>("server_timeout"),
+      BT::InputPort<bool>("use_stuck_signal", false, "Use stuck signal"),
     };
   }
 
@@ -99,6 +106,11 @@ private:
   bool consider_unknown_as_obstacle_;
   double cost_threshold_;
   std::string service_name_;
+  geometry_msgs::msg::PoseStamped current_pose_;
+  bool use_stuck_signal_;
+  bool still_stuck_;
+  rclcpp::Publisher<NodeSignal>::SharedPtr node_status_pub_;
+  rclcpp::Publisher<WarningCommand>::SharedPtr warning_cmd_pub_;
 };
 
 }  // namespace nav2_behavior_tree

@@ -26,6 +26,8 @@ IsPoseOccupiedCondition::IsPoseOccupiedCondition(
 : BT::ConditionNode(condition_name, conf),
   use_footprint_(true), consider_unknown_as_obstacle_(false), cost_threshold_(254)
 {
+  still_stuck_ = false;
+  use_stuck_signal_ = false;
   initialize();
 }
 
@@ -34,6 +36,7 @@ void IsPoseOccupiedCondition::initialize()
   getInput<double>("cost_threshold", cost_threshold_);
   getInput<bool>("use_footprint", use_footprint_);
   getInput<bool>("consider_unknown_as_obstacle", consider_unknown_as_obstacle_);
+  getInput("use_stuck_signal", use_stuck_signal_);
   getInputOrBlackboard("server_timeout", server_timeout_);
   createROSInterfaces();
 }
@@ -49,6 +52,33 @@ void IsPoseOccupiedCondition::createROSInterfaces()
       // node_->create_client<nav2_msgs::srv::GetCosts>(
       // service_name_,
       // false /* Does not create and spin an internal executor*/);
+    rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+    node_status_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
+    warning_cmd_pub_ = rclcpp::create_publisher<WarningCommand>(node_, "/audio/warn/command", 10);
+  }
+}
+
+void IsPoseOccupiedCondition::sendSignals(bool isStuck, bool newPose)
+{
+  NodeSignal stuck_signal_msg_;
+  stuck_signal_msg_.signal = NodeSignal::STUCK;
+  stuck_signal_msg_.state = isStuck;
+  node_status_pub_->publish(stuck_signal_msg_);
+
+  if (newPose) {
+    return;
+  }
+
+  WarningCommand warning_cmd_msg;
+  if (isStuck) {
+    warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
+    warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
+    warning_cmd_msg.repeat = true;
+    warning_cmd_msg.period_s = 2;
+    warning_cmd_pub_->publish(warning_cmd_msg);
+  } else {
+    warning_cmd_msg.cmd = WarningCommand::STOP;
+    warning_cmd_pub_->publish(warning_cmd_msg);
   }
 }
 
@@ -59,6 +89,20 @@ BT::NodeStatus IsPoseOccupiedCondition::tick()
   }
   geometry_msgs::msg::PoseStamped pose;
   getInput("pose", pose);
+
+  bool same_pose =
+    (current_pose_.header.frame_id == pose.header.frame_id) &&
+    (current_pose_.header.stamp == pose.header.stamp) &&
+    (current_pose_.pose == pose.pose);
+
+  if (!same_pose) {
+    // RCLCPP_INFO(node_->get_logger(), "DEBUG: Not The same goal");
+    current_pose_ = pose;
+    if (use_stuck_signal_) {
+      sendSignals(false, true);
+    }
+    still_stuck_ = false;
+  } 
 
   auto request = std::make_shared<nav2_msgs::srv::GetCosts::Request>();
   request->use_footprint = use_footprint_;
@@ -76,8 +120,16 @@ BT::NodeStatus IsPoseOccupiedCondition::tick()
   if ((response->costs[0] == 255 && !consider_unknown_as_obstacle_) ||
     response->costs[0] < cost_threshold_)
   {
+    if (still_stuck_ && use_stuck_signal_) {
+      sendSignals(false, false);
+      still_stuck_ = false;
+    }
     return BT::NodeStatus::FAILURE;
   } else {
+    if (!still_stuck_ && use_stuck_signal_) {
+      sendSignals(true, false);
+      still_stuck_ = true;
+    }
     return BT::NodeStatus::SUCCESS;
   }
 }

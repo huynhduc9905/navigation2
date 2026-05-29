@@ -24,14 +24,58 @@ ComputePathToPoseAction::ComputePathToPoseAction(
   const std::string & xml_tag_name,
   const std::string & action_name,
   const BT::NodeConfiguration & conf)
-: BtActionNode<Action>(xml_tag_name, action_name, conf)
+: BtActionNode<Action>(xml_tag_name, action_name, conf) 
 {
+  still_stuck_ = false;
+  use_stuck_signal_ = false;
+  rclcpp::QoS node_signal_qos = rclcpp::QoS(rclcpp::KeepLast(10)).reliable().transient_local();
+  node_status_pub_ = rclcpp::create_publisher<NodeSignal>(node_, "/node_signal", node_signal_qos);
+  warning_cmd_pub_ = rclcpp::create_publisher<WarningCommand>(node_, "/audio/warn/command", 10);
+}
+
+void ComputePathToPoseAction::sendSignals(bool isStuck, bool newGoal)
+{
+  NodeSignal stuck_signal_msg_;
+  stuck_signal_msg_.signal = NodeSignal::STUCK;
+  stuck_signal_msg_.state = isStuck;
+  node_status_pub_->publish(stuck_signal_msg_);
+
+  if (newGoal) {
+    return;
+  }
+
+  WarningCommand warning_cmd_msg;
+  if (isStuck) {
+    warning_cmd_msg.cmd = WarningCommand::PLAY_SIGNAL;
+    warning_cmd_msg.signal = WarningCommand::ROBOT_STUCK;
+    warning_cmd_msg.repeat = true;
+    warning_cmd_msg.period_s = 2;
+    warning_cmd_pub_->publish(warning_cmd_msg);
+  } else {
+    warning_cmd_msg.cmd = WarningCommand::STOP;
+    warning_cmd_pub_->publish(warning_cmd_msg);
+  }
 }
 
 void ComputePathToPoseAction::on_tick()
 {
   getInput("goal", goal_.goal);
   getInput("planner_id", goal_.planner_id);
+  getInput("use_stuck_signal", use_stuck_signal_);
+
+  bool same_goal =
+    (current_goal_.header.frame_id == goal_.goal.header.frame_id) &&
+    (current_goal_.header.stamp == goal_.goal.header.stamp) &&
+    (current_goal_.pose == goal_.goal.pose);
+
+  if (!same_goal) {
+    // RCLCPP_INFO(node_->get_logger(), "DEBUG: Not The same goal");
+    current_goal_ = goal_.goal;
+    if (use_stuck_signal_) {
+      sendSignals(false, true);
+    }
+    still_stuck_ = false;
+  } 
 
   // if "use_start" is provided try to enforce it (true or false), but we cannot enforce true if
   // start is not provided
@@ -60,6 +104,10 @@ BT::NodeStatus ComputePathToPoseAction::on_success()
   // Set empty error code, action was successful
   setOutput("error_code_id", ActionResult::NONE);
   setOutput("error_msg", "");
+  if (still_stuck_ && use_stuck_signal_) {
+    sendSignals(false, false);
+    still_stuck_ = false;
+  }
   return BT::NodeStatus::SUCCESS;
 }
 
@@ -69,6 +117,10 @@ BT::NodeStatus ComputePathToPoseAction::on_aborted()
   setOutput("path", empty_path);
   setOutput("error_code_id", result_.result->error_code);
   setOutput("error_msg", result_.result->error_msg);
+  if (!still_stuck_ && use_stuck_signal_) {
+    sendSignals(true, false);
+    still_stuck_ = true;
+  }
   return BT::NodeStatus::FAILURE;
 }
 
@@ -79,6 +131,10 @@ BT::NodeStatus ComputePathToPoseAction::on_cancelled()
   // Set empty error code, action was cancelled
   setOutput("error_code_id", ActionResult::NONE);
   setOutput("error_msg", "");
+  if (still_stuck_ && use_stuck_signal_) {
+    sendSignals(false, false);
+    still_stuck_ = false;
+  }
   return BT::NodeStatus::SUCCESS;
 }
 
@@ -94,6 +150,10 @@ void ComputePathToPoseAction::halt()
   setOutput("path", empty_path);
   // DO NOT reset "error_code_id" output port, we want to read it later
   // DO NOT reset "error_msg" output port, we want to read it later
+  if (still_stuck_ && use_stuck_signal_) {
+    sendSignals(false, false);
+    still_stuck_ = false;
+  }
   BtActionNode::halt();
 }
 
