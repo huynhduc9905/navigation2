@@ -88,6 +88,7 @@
       <input_port name="planner_id">Mapped name to the planner plugin type to use</input_port>
       <input_port name="server_name">Server name</input_port>
       <input_port name="server_timeout">Server timeout</input_port>
+      <input_port name="use_stuck_signal">Wheter to publish stuck signal of led and audio</input_port>
       <output_port name="path">Path created by ComputePathToPose node</output_port>
       <output_port name="error_code_id">"Compute path to pose error code"</output_port>
       <output_port name="error_msg">"Compute path to pose error message"</output_port>
@@ -376,6 +377,7 @@
       <input_port name="use_footprint">Whether to use the footprint cost or the point cost</input_port>
       <input_port name="consider_unknown_as_obstacle"> If unknown cost is considered valid </input_port>
       <input_port name="server_timeout"> Server timeout </input_port>
+      <input_port name="use_stuck_signal">Wheter to publish stuck signal of led and audio</input_port>
     </Condition>
 
     <Condition ID="WouldAControllerRecoveryHelp">
@@ -401,7 +403,6 @@
 
     <Control ID="RecoveryNode">
       <input_port name="number_of_retries">Number of retries</input_port>
-      <input_port name="use_stuck_signal">Wheter to publish stuck signal of led and audio</input_port>
     </Control>
 
     <Control ID="RoundRobin"/>
