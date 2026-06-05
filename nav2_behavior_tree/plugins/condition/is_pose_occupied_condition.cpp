@@ -129,6 +129,7 @@ BT::NodeStatus IsPoseOccupiedCondition::tick()
     if (!still_stuck_ && use_stuck_signal_) {
       sendSignals(true, false);
       still_stuck_ = true;
+      RCLCPP_INFO(node_->get_logger(), "NOTIFICATION-WARN: Obstacle on goal");
     }
     return BT::NodeStatus::SUCCESS;
   }
