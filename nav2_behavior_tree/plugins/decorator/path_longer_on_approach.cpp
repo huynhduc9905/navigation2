@@ -115,7 +115,7 @@ inline BT::NodeStatus PathLongerOnApproach::tick()
       warning_cmd_sent_ = true;
     }
 
-    RCLCPP_INFO(node_->get_logger(), "NOTIFICATION-WARN: Hard to move");
+    RCLCPP_INFO(node_->get_logger(), "NOTIFICATION-WARN: Obstacle on path. Replaning !");
 
     const BT::NodeStatus child_state = child_node_->executeTick();
     switch (child_state) {
