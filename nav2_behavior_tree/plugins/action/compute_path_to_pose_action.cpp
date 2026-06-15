@@ -120,6 +120,7 @@ BT::NodeStatus ComputePathToPoseAction::on_aborted()
   if (!still_stuck_ && use_stuck_signal_) {
     sendSignals(true, false);
     still_stuck_ = true;
+    RCLCPP_INFO(node_->get_logger(), "NOTIFICATION-WARN: No path to run");
   }
   return BT::NodeStatus::FAILURE;
 }
