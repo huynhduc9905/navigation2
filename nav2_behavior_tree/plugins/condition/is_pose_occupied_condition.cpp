@@ -108,7 +108,7 @@ BT::NodeStatus IsPoseOccupiedCondition::tick()
   request->use_footprint = use_footprint_;
   request->poses.push_back(pose);
 
-  auto response = client_->invoke(request, server_timeout_);
+  auto response = client_->invoke(request);
 
   if (!response->success) {
     RCLCPP_ERROR(

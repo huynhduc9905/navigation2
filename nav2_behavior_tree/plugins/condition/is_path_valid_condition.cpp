@@ -54,7 +54,7 @@ BT::NodeStatus IsPathValidCondition::tick()
   request->path = path;
   request->max_cost = max_cost_;
   request->consider_unknown_as_obstacle = consider_unknown_as_obstacle_;
-  auto response = client_->invoke(request, server_timeout_);
+  auto response = client_->invoke(request);
   if (response->is_valid) {
     return BT::NodeStatus::SUCCESS;
   }
