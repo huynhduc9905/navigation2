@@ -16,6 +16,7 @@
 #include "opennav_docking/docking_server.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2/utils.hpp"
+#include <chrono>
 
 using namespace std::chrono_literals;
 using rcl_interfaces::msg::ParameterType;
@@ -284,6 +285,7 @@ void DockingServer::dockRobot()
       RCLCPP_INFO(get_logger(), "Successful navigation to staging pose");
     }
 
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     // Construct initial estimate of where the dock is located in fixed_frame
     auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
@@ -324,10 +326,18 @@ void DockingServer::dockRobot()
             } else {
               RCLCPP_INFO(get_logger(), "Docking was successful!");
             }
+
+            publishZeroVelocity();
+            auto target_pose = dock_pose;
+              target_pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(
+              tf2::getYaw(target_pose.pose.orientation) - M_PI);
+
+            rotateToDock(target_pose);
+            publishZeroVelocity();
+
             result->success = true;
             result->num_retries = num_retries_;
             stashDockData(goal->use_dock_id, dock, true);
-            publishZeroVelocity();
             docking_action_server_->succeeded_current(result);
             return;
           }
@@ -459,6 +469,7 @@ void DockingServer::rotateToDock(const geometry_msgs::msg::PoseStamped & dock_po
     auto robot_pose = getRobotPoseInFrame(dock_pose.header.frame_id);
     auto angular_distance_to_heading = angles::shortest_angular_distance(
       tf2::getYaw(robot_pose.pose.orientation), tf2::getYaw(target_pose.pose.orientation));
+    // RCLCPP_INFO(get_logger(), "Angular diff: %f", angular_distance_to_heading);
     if (fabs(angular_distance_to_heading) < rotation_angular_tolerance_) {
       break;
     }
