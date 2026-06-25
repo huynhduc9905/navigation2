@@ -16,6 +16,7 @@
 #include "opennav_docking/docking_server.hpp"
 #include "tf2_geometry_msgs/tf2_geometry_msgs.hpp"
 #include "tf2/utils.hpp"
+#include <chrono>
 
 using namespace std::chrono_literals;
 using rcl_interfaces::msg::ParameterType;
@@ -34,6 +35,7 @@ DockingServer::DockingServer(const rclcpp::NodeOptions & options)
   declare_parameter("wait_charge_timeout", 5.0);
   declare_parameter("dock_approach_timeout", 30.0);
   declare_parameter("rotate_to_dock_timeout", 10.0);
+  declare_parameter("rotate_after_reached_timeout", 20.0);
   declare_parameter("undock_linear_tolerance", 0.05);
   declare_parameter("undock_angular_tolerance", 0.05);
   declare_parameter("max_retries", 3);
@@ -43,6 +45,8 @@ DockingServer::DockingServer(const rclcpp::NodeOptions & options)
   declare_parameter("dock_prestaging_tolerance", 0.5);
   declare_parameter("odom_topic", "odom");
   declare_parameter("rotation_angular_tolerance", 0.05);
+  declare_parameter("rotation_angular_after_reached_tolerance", 0.02);
+  declare_parameter("enable_rotate_after_reached", false);
 }
 
 nav2_util::CallbackReturn
@@ -56,6 +60,9 @@ DockingServer::on_configure(const rclcpp_lifecycle::State & state)
   get_parameter("wait_charge_timeout", wait_charge_timeout_);
   get_parameter("dock_approach_timeout", dock_approach_timeout_);
   get_parameter("rotate_to_dock_timeout", rotate_to_dock_timeout_);
+  get_parameter("enable_rotate_after_reached", enable_rotate_after_reached_);
+  get_parameter("rotate_after_reached_timeout", rotate_after_reached_timeout_);
+  get_parameter("rotation_angular_after_reached_tolerance", rotation_angular_after_reached_tolerance_);
   get_parameter("undock_linear_tolerance", undock_linear_tolerance_);
   get_parameter("undock_angular_tolerance", undock_angular_tolerance_);
   get_parameter("max_retries", max_retries_);
@@ -284,6 +291,7 @@ void DockingServer::dockRobot()
       RCLCPP_INFO(get_logger(), "Successful navigation to staging pose");
     }
 
+    std::this_thread::sleep_for(std::chrono::seconds(5));
     // Construct initial estimate of where the dock is located in fixed_frame
     auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
@@ -315,6 +323,10 @@ void DockingServer::dockRobot()
         }
         // Approach the dock using control law
         if (approachDock(dock, dock_pose, dock_backward)) {
+          if (enable_rotate_after_reached_) {
+            publishZeroVelocity();
+            rotateAfterReachedDock(dock_pose);
+          }
           // We are docked, wait for charging to begin
           RCLCPP_INFO(
             get_logger(), "Made contact with dock, waiting for charge to start (if applicable).");
@@ -460,6 +472,43 @@ void DockingServer::rotateToDock(const geometry_msgs::msg::PoseStamped & dock_po
     auto angular_distance_to_heading = angles::shortest_angular_distance(
       tf2::getYaw(robot_pose.pose.orientation), tf2::getYaw(target_pose.pose.orientation));
     if (fabs(angular_distance_to_heading) < rotation_angular_tolerance_) {
+      break;
+    }
+
+    auto current_vel = std::make_unique<geometry_msgs::msg::TwistStamped>();
+    current_vel->twist.angular.z = odom_sub_->getTwist().theta;
+
+    auto command = std::make_unique<geometry_msgs::msg::TwistStamped>();
+    command->header = robot_pose.header;
+    command->twist = controller_->computeRotateToHeadingCommand(
+      angular_distance_to_heading, current_vel->twist, dt);
+
+    vel_publisher_->publish(std::move(command));
+
+    if (this->now() - start > timeout) {
+      throw opennav_docking_core::FailedToControl("Timed out rotating to dock");
+    }
+
+    loop_rate.sleep();
+  }
+}
+
+void DockingServer::rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped & dock_pose)
+{
+  const double dt = 1.0 / controller_frequency_;
+  auto target_pose = dock_pose;
+  target_pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(
+    tf2::getYaw(target_pose.pose.orientation));
+
+  rclcpp::Rate loop_rate(controller_frequency_);
+  auto start = this->now();
+  auto timeout = rclcpp::Duration::from_seconds(rotate_after_reached_timeout_);
+
+  while (rclcpp::ok()) {
+    auto robot_pose = getRobotPoseInFrame(dock_pose.header.frame_id);
+    auto angular_distance_to_heading = angles::shortest_angular_distance(
+      tf2::getYaw(robot_pose.pose.orientation), tf2::getYaw(target_pose.pose.orientation));
+    if (fabs(angular_distance_to_heading) < rotation_angular_after_reached_tolerance_) {
       break;
     }
 

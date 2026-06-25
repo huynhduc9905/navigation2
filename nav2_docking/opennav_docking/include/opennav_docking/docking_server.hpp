@@ -138,6 +138,12 @@ public:
   virtual geometry_msgs::msg::PoseStamped getRobotPoseInFrame(const std::string & frame);
 
   /**
+   * @brief Perform a pure rotation to after reached dock pose.
+   * @param dock_pose The target pose that will be used to rotate.
+   */
+  void rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped & dock_pose);
+
+  /**
    * @brief Gets a preempted goal if immediately requested
    * @param Goal goal to check or replace if required with preemption
    * @param action_server Action server to check for preemptions on
@@ -245,6 +251,10 @@ protected:
   double dock_approach_timeout_;
   // Timeout to rotate to the dock
   double rotate_to_dock_timeout_;
+  // Enable feature to rotate after reached dock
+  bool enable_rotate_after_reached_;
+  // Timeout to rotate after reached dock
+  double rotate_after_reached_timeout_;
   // When undocking, these are the tolerances for arriving at the staging pose
   double undock_linear_tolerance_, undock_angular_tolerance_;
   // Maximum number of times the robot will return to staging pose and retry docking
@@ -259,6 +269,8 @@ protected:
   double dock_prestaging_tolerance_;
   // Angular tolerance to exit the rotation loop when rotate_to_dock is enabled
   double rotation_angular_tolerance_;
+  // Angular tolerance to exit the rotation loop when dock pose reached
+  double rotation_angular_after_reached_tolerance_;
 
   // This is a class member so it can be accessed in publish feedback
   rclcpp::Time action_start_time_;
