@@ -1,0 +1,5 @@
+string dock_id
+float64 timeout
+---
+bool success
+geometry_msgs/Pose dock_pose

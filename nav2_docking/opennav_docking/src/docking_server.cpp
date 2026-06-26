@@ -133,6 +133,13 @@ DockingServer::on_activate(const rclcpp_lifecycle::State & /*state*/)
   undocking_action_server_->activate();
   curr_dock_type_.clear();
 
+  save_dock_pose_service_ = std::make_shared<nav2_util::ServiceServer<nav2_msgs::srv::SaveDockPose,
+      std::shared_ptr<nav2_util::LifecycleNode>>>(
+      "save_dock_pose",
+      node,
+      std::bind(&DockingServer::saveDockPose, this, std::placeholders::_1, std::placeholders::_2,
+      std::placeholders::_3));
+
   // Add callback for dynamic parameters
   dyn_params_handler_ = node->add_on_set_parameters_callback(
     std::bind(&DockingServer::dynamicParametersCallback, this, _1));
@@ -178,6 +185,8 @@ DockingServer::on_cleanup(const rclcpp_lifecycle::State & /*state*/)
   vel_publisher_.reset();
   dock_backwards_.reset();
   odom_sub_.reset();
+  save_dock_pose_service_.reset();
+  dynamic_dock_poses_.clear();
   return nav2_util::CallbackReturn::SUCCESS;
 }
 
@@ -220,6 +229,57 @@ bool DockingServer::checkAndWarnIfPreempted(
     return true;
   }
   return false;
+}
+
+void DockingServer::saveDockPose(
+  const std::shared_ptr<rmw_request_id_t>/*request_header*/,
+  const std::shared_ptr<nav2_msgs::srv::SaveDockPose::Request> request,
+  std::shared_ptr<nav2_msgs::srv::SaveDockPose::Response> response)
+{
+  std::lock_guard<std::mutex> lock(*mutex_);
+  Dock * dock{nullptr};
+  dock = dock_db_->findDock(request->dock_id);
+
+  auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
+
+  tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
+
+  rclcpp::Rate loop_rate(controller_frequency_);
+  auto start = this->now();
+  auto timeout = rclcpp::Duration::from_seconds(request->timeout);
+
+  while (!dock->plugin->getRefinedPose(dock_pose, "")) {
+    if (this->now() - start > timeout) {
+      response->success = false;
+      response->dock_pose = geometry_msgs::msg::Pose();
+      return;
+    }
+    loop_rate.sleep();
+  }
+
+  geometry_msgs::msg::PoseStamped dock_map_pose;
+
+  try {
+    if (dock_pose.header.frame_id != "map") {
+      dock_pose.header.stamp = builtin_interfaces::msg::Time();
+      tf2_buffer_->transform(dock_pose, dock_map_pose, "map");
+    } else {
+      dock_map_pose = dock_pose;
+    }
+  } catch (const tf2::TransformException & ex) {
+    RCLCPP_WARN(this->get_logger(),
+      "Failed to transform dock pose to map: %s", ex.what());
+
+    response->success = false;
+    response->dock_pose = geometry_msgs::msg::Pose();
+    return;
+  }
+
+  dynamic_dock_poses_[request->dock_id] = dock_map_pose.pose;
+
+  response->success = true;
+  response->dock_pose = dock_map_pose.pose;
+  return;
 }
 
 void DockingServer::dockRobot()
@@ -270,6 +330,13 @@ void DockingServer::dockRobot()
       return;
     }
 
+    for (auto dock_pose : dynamic_dock_poses_) {
+      if (dock_pose.first == goal->dock_id) {
+        dock->pose = dock_pose.second;
+        break;
+      }
+    }
+
     // Send robot to its staging pose
     publishDockingFeedback(DockRobot::Feedback::NAV_TO_STAGING_POSE);
     const auto initial_staging_pose = dock->getStagingPose();
@@ -291,7 +358,7 @@ void DockingServer::dockRobot()
       RCLCPP_INFO(get_logger(), "Successful navigation to staging pose");
     }
 
-    std::this_thread::sleep_for(std::chrono::seconds(5));
+    std::this_thread::sleep_for(std::chrono::seconds(2));
     // Construct initial estimate of where the dock is located in fixed_frame
     auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);

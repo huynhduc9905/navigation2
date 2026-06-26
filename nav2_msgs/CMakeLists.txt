@@ -55,6 +55,7 @@ rosidl_generate_interfaces(${PROJECT_NAME}
   "srv/ReloadDockDatabase.srv"
   "srv/SetRouteGraph.srv"
   "srv/DynamicEdges.srv"
+  "srv/SaveDockPose.srv"
   "action/AssistedTeleop.action"
   "action/BackUp.action"
   "action/ComputePathToPose.action"

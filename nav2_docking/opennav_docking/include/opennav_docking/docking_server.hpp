@@ -21,11 +21,15 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/pose.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/simple_action_server.hpp"
+#include "nav2_util/service_server.hpp"
+#include "nav2_msgs/srv/save_dock_pose.hpp"
 #include "nav2_util/twist_publisher.hpp"
 #include "nav_2d_utils/odom_subscriber.hpp"
 #include "opennav_docking/controller.hpp"
@@ -237,6 +241,12 @@ protected:
   // Dynamic parameters handler
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 
+  // Save dock pose callback
+  void saveDockPose(
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<nav2_msgs::srv::SaveDockPose::Request> request,
+    std::shared_ptr<nav2_msgs::srv::SaveDockPose::Response> response);
+
   // Mutex for dynamic parameters and dock database
   std::shared_ptr<std::mutex> mutex_;
 
@@ -271,6 +281,8 @@ protected:
   double rotation_angular_tolerance_;
   // Angular tolerance to exit the rotation loop when dock pose reached
   double rotation_angular_after_reached_tolerance_;
+  // Dynamic saved dock poses
+  std::map<std::string, geometry_msgs::msg::Pose> dynamic_dock_poses_ = {};
 
   // This is a class member so it can be accessed in publish feedback
   rclcpp::Time action_start_time_;
@@ -279,6 +291,7 @@ protected:
   std::unique_ptr<nav_2d_utils::OdomSubscriber> odom_sub_;
   std::unique_ptr<DockingActionServer> docking_action_server_;
   std::unique_ptr<UndockingActionServer> undocking_action_server_;
+  nav2_util::ServiceServer<nav2_msgs::srv::SaveDockPose, std::shared_ptr<nav2_util::LifecycleNode>>::SharedPtr save_dock_pose_service_;
 
   std::unique_ptr<DockDatabase> dock_db_;
   std::unique_ptr<Navigator> navigator_;
