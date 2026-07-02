@@ -121,6 +121,14 @@ public:
   bool resetApproach(const geometry_msgs::msg::PoseStamped & staging_pose, bool backward);
 
   /**
+   * @brief Control robot to an intermediate docking pose before final dock contact.
+   * @param pose The intermediate pose to approach.
+   * @param backward If true, the robot will drive backwards.
+   * @returns True if the pose is reached, False if cancelled/preempted.
+   */
+  bool approachPose(const geometry_msgs::msg::PoseStamped & pose, bool backward);
+
+  /**
    * @brief Run a single iteration of the control loop to approach a pose.
    * @param cmd The return command.
    * @param pose The pose to command towards.
@@ -145,7 +153,7 @@ public:
    * @brief Perform a pure rotation to after reached dock pose.
    * @param dock_pose The target pose that will be used to rotate.
    */
-  void rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped & dock_pose);
+  void rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped & dock_pose, bool backward);
 
   /**
    * @brief Gets a preempted goal if immediately requested
@@ -281,6 +289,8 @@ protected:
   double rotation_angular_tolerance_;
   // Angular tolerance to exit the rotation loop when dock pose reached
   double rotation_angular_after_reached_tolerance_;
+  // Offset from the refined dock pose to the intermediate staging dock pose
+  double staging_dock_pose_offset_;
   // Dynamic saved dock poses
   std::map<std::string, geometry_msgs::msg::Pose> dynamic_dock_poses_ = {};
 
