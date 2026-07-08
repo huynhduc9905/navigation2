@@ -631,7 +631,9 @@ void DockingServer::rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped
 bool DockingServer::approachDock(
   Dock * dock, geometry_msgs::msg::PoseStamped & dock_pose, bool backward)
 {
+  const double dt = 1.0 / controller_frequency_;
   rclcpp::Rate loop_rate(controller_frequency_);
+  geometry_msgs::msg::Twist previous_command;
   auto start = this->now();
   auto timeout = rclcpp::Duration::from_seconds(dock_approach_timeout_);
 
@@ -682,6 +684,8 @@ bool DockingServer::approachDock(
     if (!controller_->computeVelocityCommand(target_pose.pose, command->twist, true, backward)) {
       throw opennav_docking_core::FailedToControl("Failed to get control");
     }
+    command->twist = controller_->limitVelocityCommand(command->twist, previous_command, dt);
+    previous_command = command->twist;
     vel_publisher_->publish(std::move(command));
 
     if (this->now() - start > timeout) {
@@ -729,7 +733,9 @@ bool DockingServer::waitForCharge(Dock * dock)
 bool DockingServer::resetApproach(
   const geometry_msgs::msg::PoseStamped & staging_pose, bool backward)
 {
+  const double dt = 1.0 / controller_frequency_;
   rclcpp::Rate loop_rate(controller_frequency_);
+  geometry_msgs::msg::Twist previous_command;
   auto start = this->now();
   auto timeout = rclcpp::Duration::from_seconds(dock_approach_timeout_);
   while (rclcpp::ok()) {
@@ -746,11 +752,13 @@ bool DockingServer::resetApproach(
     auto command = std::make_unique<geometry_msgs::msg::TwistStamped>();
     command->header.stamp = now();
     if (getCommandToPose(
-        command->twist, staging_pose, undock_linear_tolerance_, undock_angular_tolerance_, false,
+        command->twist, staging_pose, 0.10, 0.5, false,
         !backward))
     {
       return true;
     }
+    command->twist = controller_->limitVelocityCommand(command->twist, previous_command, dt);
+    previous_command = command->twist;
     vel_publisher_->publish(std::move(command));
 
     if (this->now() - start > timeout) {
@@ -764,7 +772,9 @@ bool DockingServer::resetApproach(
 
 bool DockingServer::approachPose(const geometry_msgs::msg::PoseStamped & pose, bool backward)
 {
+  const double dt = 1.0 / controller_frequency_;
   rclcpp::Rate loop_rate(controller_frequency_);
+  geometry_msgs::msg::Twist previous_command;
   auto start = this->now();
   auto timeout = rclcpp::Duration::from_seconds(dock_approach_timeout_);
   while (rclcpp::ok()) {
@@ -785,6 +795,8 @@ bool DockingServer::approachPose(const geometry_msgs::msg::PoseStamped & pose, b
     {
       return true;
     }
+    command->twist = controller_->limitVelocityCommand(command->twist, previous_command, dt);
+    previous_command = command->twist;
     vel_publisher_->publish(std::move(command));
 
     if (this->now() - start > timeout) {
@@ -822,7 +834,7 @@ bool DockingServer::getCommandToPose(
 
   // Compute velocity command
   if (!controller_->computeVelocityCommand(target_pose.pose, cmd, is_docking, backward)) {
-    throw opennav_docking_core::FailedToControl("Failed to get control");
+    throw opennav_docking_core::FailedToControl("Failed to get control when get cmd to pose");
   }
 
   // Command is valid, but target is not reached
@@ -833,6 +845,7 @@ void DockingServer::undockRobot()
 {
   std::lock_guard<std::mutex> lock(*mutex_);
   action_start_time_ = this->now();
+  const double dt = 1.0 / controller_frequency_;
   rclcpp::Rate loop_rate(controller_frequency_);
 
   auto goal = undocking_action_server_->get_current_goal();
@@ -898,6 +911,7 @@ void DockingServer::undockRobot()
     }
 
     // Control robot to staging pose
+    geometry_msgs::msg::Twist previous_command;
     rclcpp::Time loop_start = this->now();
     while (rclcpp::ok()) {
       // Stop if we exceed max duration
@@ -950,6 +964,8 @@ void DockingServer::undockRobot()
       }
 
       // Publish command and sleep
+      command->twist = controller_->limitVelocityCommand(command->twist, previous_command, dt);
+      previous_command = command->twist;
       vel_publisher_->publish(std::move(command));
       loop_rate.sleep();
     }
