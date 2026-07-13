@@ -40,6 +40,8 @@ DockingServer::DockingServer(const rclcpp::NodeOptions & options)
   declare_parameter("rotate_after_reached_timeout", 20.0);
   declare_parameter("undock_linear_tolerance", 0.05);
   declare_parameter("undock_angular_tolerance", 0.05);
+  declare_parameter("retry_linear_tolerance", 0.10);
+  declare_parameter("retry_angular_tolerance", 0.5);
   declare_parameter("max_retries", 3);
   declare_parameter("base_frame", "base_link");
   declare_parameter("fixed_frame", "odom");
@@ -68,6 +70,8 @@ DockingServer::on_configure(const rclcpp_lifecycle::State & state)
   get_parameter("rotation_angular_after_reached_tolerance", rotation_angular_after_reached_tolerance_);
   get_parameter("undock_linear_tolerance", undock_linear_tolerance_);
   get_parameter("undock_angular_tolerance", undock_angular_tolerance_);
+  get_parameter("retry_linear_tolerance", retry_linear_tolerance_);
+  get_parameter("retry_angular_tolerance", retry_angular_tolerance_);
   get_parameter("max_retries", max_retries_);
   get_parameter("base_frame", base_frame_);
   get_parameter("fixed_frame", fixed_frame_);
@@ -752,7 +756,7 @@ bool DockingServer::resetApproach(
     auto command = std::make_unique<geometry_msgs::msg::TwistStamped>();
     command->header.stamp = now();
     if (getCommandToPose(
-        command->twist, staging_pose, 0.10, 0.5, false,
+        command->twist, staging_pose, retry_linear_tolerance_, retry_angular_tolerance_, false,
         !backward))
     {
       return true;

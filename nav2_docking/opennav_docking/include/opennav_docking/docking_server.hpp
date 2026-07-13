@@ -275,6 +275,8 @@ protected:
   double rotate_after_reached_timeout_;
   // When undocking, these are the tolerances for arriving at the staging pose
   double undock_linear_tolerance_, undock_angular_tolerance_;
+  // When retrying, these are the tolerances for arriving at the staging pose
+  double retry_linear_tolerance_, retry_angular_tolerance_;
   // Maximum number of times the robot will return to staging pose and retry docking
   int max_retries_, num_retries_;
   // This is the root frame of the robot - typically "base_link"

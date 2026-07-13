@@ -205,6 +205,8 @@ For debugging purposes, there are several publishers which can be used with RVIZ
 | rotate_to_dock_timeout       | Timeout (s) to attempt rotate-to-dock loop             | double |  10.0      |
 | undock_linear_tolerance      | Tolerance (m) to exit the undocking control loop at staging pose    | double |  0.05      |
 | undock_angular_tolerance     | Angular tolerance (rad) to exit undocking loop at staging pose    | double |  0.05      |
+| retry_linear_tolerance      | Tolerance (m) to exit the retrying control loop at staging pose    | double |  0.10      |
+| retry_angular_tolerance     | Angular tolerance (rad) to exit retrying loop at staging pose    | double |  0.5      |
 | max_retries        | Maximum number of retries to attempt    | int |  3      |
 | base_frame        | Robot's base frame for control law   | string |  "base_link"      |
 | fixed_frame        | Fixed frame to use, recommended to be a smooth odometry frame **not** map   | string |  "odom"      |
@@ -222,8 +224,8 @@ For debugging purposes, there are several publishers which can be used with RVIZ
 | controller.v_linear_min | Minimum linear velocity (m/s) | double | 0.1     |
 | controller.v_linear_max | Maximum linear velocity (m/s) | double | 0.25    |
 | controller.v_angular_max | Maximum angular velocity (rad/s) produced by the control law | double | 0.75    |
-| controller.max_linear_accel | Maximum linear acceleration (m/s^2) applied to command velocity | double | 0.5    |
-| controller.max_linear_decel | Maximum linear deceleration (m/s^2) applied to command velocity | double | 0.5    |
+| controller.max_linear_accel | Maximum linear acceleration (m/s^2) applied to command velocity | double | 1.0    |
+| controller.max_linear_decel | Maximum linear deceleration (m/s^2) applied to command velocity | double | 1.0    |
 | controller.max_angular_accel | Maximum angular acceleration (rad/s^2) applied to command velocity | double | 3.2    |
 | controller.slowdown_radius | Radius (m) around the goal pose in which the robot will start to slow down | double | 0.25     |
 | controller.rotate_to_heading_angular_vel | Angular velocity (rad/s) to rotate to the goal heading when rotate_to_dock is enabled | double | 1.0    |
