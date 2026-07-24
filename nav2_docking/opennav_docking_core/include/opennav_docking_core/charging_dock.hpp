@@ -89,6 +89,18 @@ public:
   virtual bool getRefinedPose(geometry_msgs::msg::PoseStamped & pose, std::string id) = 0;
 
   /**
+   * @brief Check if refined poses are expected from an external detector.
+   * @return True if external detection is enabled.
+   */
+  virtual bool isExternalDetectionEnabled() {return false;}
+
+  /**
+   * @brief Enable or disable external detection for refined poses.
+   * @param enabled Whether external detection should be used.
+   */
+  virtual void setExternalDetectionEnabled(bool /*enabled*/) {}
+
+  /**
    * @brief Have we made contact with dock? This can be implemented in a variety
    * of ways: by establishing communications with the dock, by monitoring the
    * the drive motor efforts, etc.

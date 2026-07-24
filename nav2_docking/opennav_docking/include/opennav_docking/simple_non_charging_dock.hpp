@@ -84,6 +84,16 @@ public:
   virtual bool getRefinedPose(geometry_msgs::msg::PoseStamped & pose, std::string id);
 
   /**
+   * @copydoc opennav_docking_core::ChargingDock::isExternalDetectionEnabled
+   */
+  virtual bool isExternalDetectionEnabled();
+
+  /**
+   * @copydoc opennav_docking_core::ChargingDock::setExternalDetectionEnabled
+   */
+  virtual void setExternalDetectionEnabled(bool enabled);
+
+  /**
    * @copydoc opennav_docking_core::ChargingDock::isDocked
    */
   virtual bool isDocked();

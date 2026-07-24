@@ -315,6 +315,19 @@ void DockingServer::dockRobot()
   getPreemptedGoalIfRequested(goal, docking_action_server_);
   Dock * dock{nullptr};
   num_retries_ = 0;
+  struct ExternalDetectionRestore
+  {
+    ChargingDock::Ptr plugin;
+    bool restore{false};
+    bool enabled{false};
+
+    ~ExternalDetectionRestore()
+    {
+      if (restore && plugin) {
+        plugin->setExternalDetectionEnabled(enabled);
+      }
+    }
+  } external_detection_restore;
 
   try {
     // Get dock (instance and plugin information) from request
@@ -331,8 +344,26 @@ void DockingServer::dockRobot()
       dock = generateGoalDock(goal);
     }
 
-    // Check if robot is docked or charging before proceeding, only applicable to charging docks
-    if (dock->plugin->isCharger() && (dock->plugin->isDocked() || dock->plugin->isCharging())) {
+    for (auto dock_pose : dynamic_dock_poses_) {
+      if (dock_pose.first == goal->dock_id) {
+        dock->pose = dock_pose.second;
+        break;
+      }
+    }
+    external_detection_restore.plugin = dock->plugin;
+    external_detection_restore.enabled = dock->plugin->isExternalDetectionEnabled();
+    external_detection_restore.restore = external_detection_restore.enabled;
+
+    // Send robot to its staging pose
+    publishDockingFeedback(DockRobot::Feedback::NAV_TO_STAGING_POSE);
+    const auto initial_staging_pose = dock->getStagingPose();
+
+    // Check if robot is docked or charging before proceeding, only applicable to charging docks.
+    // External detection docks can contain a stale pose from a prior action, so they must not use
+    // this shortcut before the current action obtains a fresh detection or enters database fallback.
+    if (dock->plugin->isCharger() && !external_detection_restore.enabled &&
+      (dock->plugin->isDocked() || dock->plugin->isCharging()))
+    {
       RCLCPP_INFO(
         get_logger(), "Robot is already docked and/or charging (if applicable), no need to dock");
       result->success = true;
@@ -340,16 +371,6 @@ void DockingServer::dockRobot()
       return;
     }
 
-    for (auto dock_pose : dynamic_dock_poses_) {
-      if (dock_pose.first == goal->dock_id) {
-        dock->pose = dock_pose.second;
-        break;
-      }
-    }
-
-    // Send robot to its staging pose
-    publishDockingFeedback(DockRobot::Feedback::NAV_TO_STAGING_POSE);
-    const auto initial_staging_pose = dock->getStagingPose();
     const auto robot_pose = getRobotPoseInFrame(initial_staging_pose.header.frame_id);
     if (!goal->navigate_to_staging_pose ||
       utils::l2Norm(robot_pose.pose, initial_staging_pose.pose) < dock_prestaging_tolerance_)
@@ -370,17 +391,42 @@ void DockingServer::dockRobot()
 
     std::this_thread::sleep_for(std::chrono::seconds(2));
     // Construct initial estimate of where the dock is located in fixed_frame
-    auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
-    tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
+    auto database_dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
+    tf2_buffer_->transform(database_dock_pose, database_dock_pose, fixed_frame_);
+    auto dock_pose = database_dock_pose;
 
-    // Get initial detection of dock before proceeding to move
-    doInitialPerception(dock, dock_pose);
-    RCLCPP_INFO(get_logger(), "Successful initial dock detection");
+    bool database_pose_fallback_attempted = false;
+    bool database_pose_fallback_active = false;
+    auto enableDatabasePoseFallback = [&](const std::string & reason) {
+        if (!external_detection_restore.enabled || database_pose_fallback_attempted) {
+          return false;
+        }
+
+        database_pose_fallback_attempted = true;
+        database_pose_fallback_active = true;
+        dock->plugin->setExternalDetectionEnabled(false);
+        dock_pose = database_dock_pose;
+        RCLCPP_WARN(
+          get_logger(),
+          "External dock detection failed (%s). Retrying once with database dock pose.",
+          reason.c_str());
+        return true;
+      };
 
     // Get the direction of the movement
     bool dock_backward = dock_backwards_.has_value() ?
       dock_backwards_.value() :
       (dock->plugin->getDockDirection() == opennav_docking_core::DockDirection::BACKWARD);
+
+    // Get initial detection of dock before proceeding to move
+    try {
+      doInitialPerception(dock, dock_pose);
+      RCLCPP_INFO(get_logger(), "Successful initial dock detection");
+    } catch (opennav_docking_core::FailedToDetectDock & e) {
+      if (!enableDatabasePoseFallback(e.what())) {
+        throw;
+      }
+    }
 
     // If we performed a rotation before docking backward, we must rotate the staging pose
     // to match the robot orientation
@@ -391,15 +437,18 @@ void DockingServer::dockRobot()
     }
 
     auto staging_dock_pose = dock_pose;
-    const double staging_dock_yaw = tf2::getYaw(staging_dock_pose.pose.orientation);
+    auto updateStagingDockPose = [&]() {
+        staging_dock_pose = dock_pose;
+        const double staging_dock_yaw = tf2::getYaw(staging_dock_pose.pose.orientation);
+        staging_dock_pose.pose.position.x -= cos(staging_dock_yaw) * staging_dock_pose_offset_;
+        staging_dock_pose.pose.position.y -= sin(staging_dock_yaw) * staging_dock_pose_offset_;
 
-    staging_dock_pose.pose.position.x -= cos(staging_dock_yaw) * staging_dock_pose_offset_;
-    staging_dock_pose.pose.position.y -= sin(staging_dock_yaw) * staging_dock_pose_offset_;
-    
-    if (dock_backward) {
-      staging_dock_pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(
-        tf2::getYaw(staging_dock_pose.pose.orientation) + M_PI);
-    }
+        if (dock_backward) {
+          staging_dock_pose.pose.orientation = nav2_util::geometry_utils::orientationAroundZAxis(
+            tf2::getYaw(staging_dock_pose.pose.orientation) + M_PI);
+        }
+      };
+    updateStagingDockPose();
 
     // Docking control loop: while not docked, run controller
     rclcpp::Time dock_contact_time;
@@ -451,12 +500,37 @@ void DockingServer::dockRobot()
         publishZeroVelocity();
         docking_action_server_->terminate_all(result);
         return;
+      } catch (opennav_docking_core::FailedToDetectDock & e) {
+        if (database_pose_fallback_active) {
+          RCLCPP_ERROR(
+            get_logger(), "Failed to dock using database dock pose fallback: %s", e.what());
+          throw;
+        }
+
+        if (++num_retries_ > max_retries_) {
+          if (!enableDatabasePoseFallback(e.what())) {
+            RCLCPP_ERROR(get_logger(), "Failed to dock, all retries have been used");
+            throw;
+          }
+        } else {
+          RCLCPP_WARN(get_logger(), "Docking failed, will retry: %s", e.what());
+        }
       } catch (opennav_docking_core::DockingException & e) {
+        if (database_pose_fallback_active) {
+          RCLCPP_ERROR(
+            get_logger(), "Failed to dock using database dock pose fallback: %s", e.what());
+          throw;
+        }
+
         if (++num_retries_ > max_retries_) {
           RCLCPP_ERROR(get_logger(), "Failed to dock, all retries have been used");
           throw;
         }
         RCLCPP_WARN(get_logger(), "Docking failed, will retry: %s", e.what());
+      }
+
+      if (database_pose_fallback_active) {
+        updateStagingDockPose();
       }
 
       // Reset to staging pose to try again

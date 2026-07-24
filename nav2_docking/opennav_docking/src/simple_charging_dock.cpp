@@ -256,6 +256,16 @@ bool SimpleChargingDock::getRefinedPose(geometry_msgs::msg::PoseStamped & pose, 
   return true;
 }
 
+bool SimpleChargingDock::isExternalDetectionEnabled()
+{
+  return use_external_detection_pose_;
+}
+
+void SimpleChargingDock::setExternalDetectionEnabled(bool enabled)
+{
+  use_external_detection_pose_ = enabled;
+}
+
 bool SimpleChargingDock::isDocked()
 {
   if (joint_state_sub_) {
