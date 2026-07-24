@@ -9,6 +9,7 @@ string dock_type  # If using dock_pose, what type of dock it is. Not necessary i
 float32 max_staging_time 1000.0  # Maximum time for navigation to get to the dock's staging pose.
 bool navigate_to_staging_pose True  # Whether or not to navigate to staging pose or assume robot is already at staging pose within tolerance to execute behavior
 
+bool use_dynamic_external_detection True
 ---
 #result definition
 

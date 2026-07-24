@@ -374,6 +374,8 @@ void DockingServer::dockRobot()
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
     geometry_msgs::msg::PoseStamped staging_dock_pose = dock_pose;
 
+    dock->plugin->setExternalDetectionEnabled(goal->use_dynamic_external_detection);
+
     // Get initial detection of dock before proceeding to move
     doInitialPerception(dock, dock_pose);
     RCLCPP_INFO(get_logger(), "Successful initial dock detection");

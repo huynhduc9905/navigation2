@@ -130,6 +130,12 @@ public:
   virtual bool isCharger() {return true;}
 
   /**
+   * @brief Enable or disable external detection for refined poses.
+   * @param enabled Whether external detection should be used.
+   */
+  virtual void setExternalDetectionEnabled(bool /*enabled*/) {}
+
+  /**
    * @brief Indicates the direction of the dock. This is used to determine if the
    * robot should drive forwards or backwards onto the dock.
    * @return DockDirection The direction of the dock
