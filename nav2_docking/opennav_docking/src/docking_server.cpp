@@ -372,6 +372,7 @@ void DockingServer::dockRobot()
     // Construct initial estimate of where the dock is located in fixed_frame
     auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
+    geometry_msgs::msg::PoseStamped staging_dock_pose = dock_pose;
 
     // Get initial detection of dock before proceeding to move
     doInitialPerception(dock, dock_pose);
@@ -390,7 +391,6 @@ void DockingServer::dockRobot()
         tf2::getYaw(staging_pose.pose.orientation) + M_PI);
     }
 
-    auto staging_dock_pose = dock_pose;
     const double staging_dock_yaw = tf2::getYaw(staging_dock_pose.pose.orientation);
 
     staging_dock_pose.pose.position.x -= cos(staging_dock_yaw) * staging_dock_pose_offset_;
@@ -415,7 +415,7 @@ void DockingServer::dockRobot()
             if (enable_rotate_after_reached_) {
               publishZeroVelocity();
               std::this_thread::sleep_for(std::chrono::seconds(1));
-              rotateAfterReachedDock(dock_pose, dock_backward);
+              rotateAfterReachedDock(staging_dock_pose, dock_backward);
             }
             RCLCPP_INFO(get_logger(), "Reached staging dock pose, moving to dock pose now");
             publishZeroVelocity();
