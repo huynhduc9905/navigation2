@@ -52,6 +52,7 @@ DockingServer::DockingServer(const rclcpp::NodeOptions & options)
   declare_parameter("rotation_angular_after_reached_tolerance", 0.02);
   declare_parameter("enable_rotate_after_reached", false);
   declare_parameter("staging_dock_pose_offset", 0.25);
+  declare_parameter("use_staging_dock_pose", false);
 }
 
 nav2_util::CallbackReturn
@@ -78,6 +79,7 @@ DockingServer::on_configure(const rclcpp_lifecycle::State & state)
   get_parameter("dock_prestaging_tolerance", dock_prestaging_tolerance_);
   get_parameter("rotation_angular_tolerance", rotation_angular_tolerance_);
   get_parameter("staging_dock_pose_offset", staging_dock_pose_offset_);
+  get_parameter("use_staging_dock_pose", use_staging_dock_pose_);
 
   RCLCPP_INFO(get_logger(), "Controller frequency set to %.4fHz", controller_frequency_);
 
@@ -408,15 +410,17 @@ void DockingServer::dockRobot()
           rotateToDock(dock_pose);
         }
         // Approach the intermediate staging dock pose using control law first.
-        if (approachPose(staging_dock_pose, dock_backward)) {
-          if (enable_rotate_after_reached_) {
+        if (!use_staging_dock_pose_ || approachPose(staging_dock_pose, dock_backward)) {
+          if (use_staging_dock_pose_) {
+            if (enable_rotate_after_reached_) {
+              publishZeroVelocity();
+              std::this_thread::sleep_for(std::chrono::seconds(1));
+              rotateAfterReachedDock(dock_pose, dock_backward);
+            }
+            RCLCPP_INFO(get_logger(), "Reached staging dock pose, moving to dock pose now");
             publishZeroVelocity();
             std::this_thread::sleep_for(std::chrono::seconds(1));
-            rotateAfterReachedDock(dock_pose, dock_backward);
           }
-          RCLCPP_INFO(get_logger(), "Reached staging dock pose, moving to dock pose now");
-          publishZeroVelocity();
-          std::this_thread::sleep_for(std::chrono::seconds(1));
           // Approach the dock using control law
           if (approachDock(dock, dock_pose, dock_backward)) {
             if (enable_rotate_after_reached_) {

@@ -271,6 +271,8 @@ protected:
   double rotate_to_dock_timeout_;
   // Enable feature to rotate after reached dock
   bool enable_rotate_after_reached_;
+  // Use staging dock pose
+  bool use_staging_dock_pose_;
   // Timeout to rotate after reached dock
   double rotate_after_reached_timeout_;
   // When undocking, these are the tolerances for arriving at the staging pose
