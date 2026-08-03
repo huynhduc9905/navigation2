@@ -244,81 +244,6 @@ inline geometry_msgs::msg::Pose getLastPathPose(const models::Path & path)
 }
 
 /**
- * @brief Get the target pose to be evaluated by the critic
- * @param data Data to use
- * @param enforce_path_inversion True to return the cusp point (last pose of the path)
- * instead of the original goal
- * @return geometry_msgs::msg::Pose Target pose for the critic
- */
-inline geometry_msgs::msg::Pose getCriticGoal(
-  const CriticData & data,
-  bool enforce_path_inversion)
-{
-  if (enforce_path_inversion) {
-    return getLastPathPose(data.path);
-  } else {
-    return data.goal;
-  }
-}
-
-/**
- * @brief Check if the robot pose is within the Goal Checker's tolerances to goal
- * @param global_checker Pointer to the goal checker
- * @param robot Pose of robot
- * @param goal Goal pose
- * @return bool If robot is within goal checker tolerances to the goal
- */
-inline bool withinPositionGoalTolerance(
-  nav2_core::GoalChecker * goal_checker,
-  const geometry_msgs::msg::Pose & robot,
-  const geometry_msgs::msg::Pose & goal)
-{
-  if (goal_checker) {
-    geometry_msgs::msg::Pose pose_tolerance;
-    geometry_msgs::msg::Twist velocity_tolerance;
-    goal_checker->getTolerances(pose_tolerance, velocity_tolerance);
-
-    const auto pose_tolerance_sq = pose_tolerance.position.x * pose_tolerance.position.x;
-
-    auto dx = robot.position.x - goal.position.x;
-    auto dy = robot.position.y - goal.position.y;
-
-    auto dist_sq = dx * dx + dy * dy;
-
-    if (dist_sq < pose_tolerance_sq) {
-      return true;
-    }
-  }
-
-  return false;
-}
-
-/**
- * @brief Check if the robot pose is within tolerance to the goal
- * @param pose_tolerance Pose tolerance to use
- * @param robot Pose of robot
- * @param goal Goal pose
- * @return bool If robot is within tolerance to the goal
- */
-inline bool withinPositionGoalTolerance(
-  float pose_tolerance,
-  const geometry_msgs::msg::Pose & robot,
-  const geometry_msgs::msg::Pose & goal)
-{
-  const double & dist_sq =
-    std::pow(goal.position.x - robot.position.x, 2) +
-    std::pow(goal.position.y - robot.position.y, 2);
-
-  const float pose_tolerance_sq = pose_tolerance * pose_tolerance;
-
-  if (dist_sq < pose_tolerance_sq) {
-    return true;
-  }
-
-  return false;
-}
-
-/**
   * @brief normalize
   * Normalizes the angle to be -M_PIF circle to +M_PIF circle
   * It takes and returns radians.
@@ -367,26 +292,27 @@ inline size_t findPathFurthestReachedPoint(const CriticData & data)
   const auto traj_x = data.trajectories.x.col(traj_cols - 1);
   const auto traj_y = data.trajectories.y.col(traj_cols - 1);
 
-  const auto dx = (data.path.x.transpose()).replicate(traj_x.rows(), 1).colwise() - traj_x;
-  const auto dy = (data.path.y.transpose()).replicate(traj_y.rows(), 1).colwise() - traj_y;
-
-  const auto dists = dx * dx + dy * dy;
-
   int max_id_by_trajectories = 0, min_id_by_path = 0;
   float min_distance_by_path = std::numeric_limits<float>::max();
-  size_t n_rows = dists.rows();
-  size_t n_cols = dists.cols();
+  size_t n_rows = traj_x.rows();
+  size_t n_cols = data.path.x.size();
   for (size_t i = 0; i != n_rows; i++) {
     min_id_by_path = 0;
     min_distance_by_path = std::numeric_limits<float>::max();
-    for (size_t j = max_id_by_trajectories; j != n_cols; j++) {
-      const float cur_dist = dists(i, j);
+    for (size_t j = 0; j != n_cols; j++) {
+      const float dx = data.path.x(j) - traj_x(i);
+      const float dy = data.path.y(j) - traj_y(i);
+      const float cur_dist = dx * dx + dy * dy;
       if (cur_dist < min_distance_by_path) {
         min_distance_by_path = cur_dist;
         min_id_by_path = j;
       }
     }
     max_id_by_trajectories = std::max(max_id_by_trajectories, min_id_by_path);
+    // Early exit if we've already reached the end of the path
+    if (max_id_by_trajectories == static_cast<int>(n_cols) - 1) {
+      break;
+    }
   }
   return max_id_by_trajectories;
 }
