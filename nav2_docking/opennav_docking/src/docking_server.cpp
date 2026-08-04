@@ -921,6 +921,11 @@ void DockingServer::undockRobot()
     }
 
     // Control robot to staging pose
+
+    auto feedback = std::make_shared<UndockRobot::Feedback>();
+    feedback->state = UndockRobot::Feedback::CONTROLLING;
+    undocking_action_server_->publish_feedback(feedback);
+
     geometry_msgs::msg::Twist previous_command;
     rclcpp::Time loop_start = this->now();
     while (rclcpp::ok()) {
