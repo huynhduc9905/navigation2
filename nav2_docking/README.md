@@ -209,6 +209,8 @@ For debugging purposes, there are several publishers which can be used with RVIZ
 | retry_angular_tolerance     | Angular tolerance (rad) to exit retrying loop at staging pose    | double |  0.5      |
 | use_staging_dock_pose     | Whether moving to a staging dock pose before moving to dock pose   | bool |  false      |
 | staging_dock_pose_offset     | Offset X from staging dock pose to dock pose (when use_staging_dock_pose = True)  | double |  0.25    |
+| non_detection_x_offset     | Offset X from database dock pose when receive action goal with use_dynamic_external_detection = False | double |  0.0  |
+| non_detection_y_offset     | Offset Y from database dock pose when receive action goal with use_dynamic_external_detection = False | double |  0.0  |
 | max_retries        | Maximum number of retries to attempt    | int |  3      |
 | base_frame        | Robot's base frame for control law   | string |  "base_link"      |
 | fixed_frame        | Fixed frame to use, recommended to be a smooth odometry frame **not** map   | string |  "odom"      |

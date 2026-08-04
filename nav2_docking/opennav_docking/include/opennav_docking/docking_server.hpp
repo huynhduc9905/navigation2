@@ -295,6 +295,10 @@ protected:
   double rotation_angular_after_reached_tolerance_;
   // Offset from the refined dock pose to the intermediate staging dock pose
   double staging_dock_pose_offset_;
+  // Non-detection x offset from dock pose
+  double non_detection_x_offset_;
+  // Non-detection y offset from dock pose
+  double non_detection_y_offset_;
   // Dynamic saved dock poses
   std::map<std::string, geometry_msgs::msg::Pose> dynamic_dock_poses_ = {};
 

@@ -53,6 +53,8 @@ DockingServer::DockingServer(const rclcpp::NodeOptions & options)
   declare_parameter("enable_rotate_after_reached", false);
   declare_parameter("staging_dock_pose_offset", 0.25);
   declare_parameter("use_staging_dock_pose", false);
+  declare_parameter("non_detection_x_offset", 0.0);
+  declare_parameter("non_detection_y_offset", 0.0);
 }
 
 nav2_util::CallbackReturn
@@ -80,6 +82,8 @@ DockingServer::on_configure(const rclcpp_lifecycle::State & state)
   get_parameter("rotation_angular_tolerance", rotation_angular_tolerance_);
   get_parameter("staging_dock_pose_offset", staging_dock_pose_offset_);
   get_parameter("use_staging_dock_pose", use_staging_dock_pose_);
+  get_parameter("non_detection_x_offset", non_detection_x_offset_);
+  get_parameter("non_detection_y_offset", non_detection_y_offset_);
 
   RCLCPP_INFO(get_logger(), "Controller frequency set to %.4fHz", controller_frequency_);
 
@@ -371,6 +375,13 @@ void DockingServer::dockRobot()
     std::this_thread::sleep_for(std::chrono::seconds(2));
     // Construct initial estimate of where the dock is located in fixed_frame
     auto dock_pose = utils::getDockPoseStamped(dock, rclcpp::Time(0));
+    if (!goal->use_dynamic_external_detection) {
+      const double dock_pose_yaw = tf2::getYaw(dock_pose.pose.orientation);
+      dock_pose.pose.position.x += cos(dock_pose_yaw) * non_detection_x_offset_ -
+        sin(dock_pose_yaw) * non_detection_y_offset_;
+      dock_pose.pose.position.y += sin(dock_pose_yaw) * non_detection_x_offset_ +
+        cos(dock_pose_yaw) * non_detection_y_offset_;
+    }
     tf2_buffer_->transform(dock_pose, dock_pose, fixed_frame_);
     geometry_msgs::msg::PoseStamped staging_dock_pose = dock_pose;
 
