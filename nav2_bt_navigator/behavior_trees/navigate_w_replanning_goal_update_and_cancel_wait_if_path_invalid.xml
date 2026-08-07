@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<root BTCPP_format="4"
+      main_tree_to_execute="MainTree">
+  <BehaviorTree ID="MainTree">
+    <PauseResumeController pause_service_name="pause"
+                           resume_service_name="resume">
+      <RecoveryNode name="NavigateRecovery"
+                    number_of_retries="10">
+        <PipelineSequence name="NavigateWithGoalUpdateAndInvalidPathWait">
+          <ControllerSelector topic_name="controller_selector"
+                              default_controller="FollowPath"
+                              selected_controller="{selected_controller}"/>
+          <PlannerSelector topic_name="planner_selector"
+                           default_planner="GridBased"
+                           selected_planner="{selected_planner}"/>
+          <Fallback>
+            <Inverter>
+              <GlobalUpdatedGoal/>
+            </Inverter>
+            <ComputePathToPose goal="{goal}"
+                               planner_id="{selected_planner}"
+                               path="{path}"
+                               error_code_id="{compute_path_error_code}"
+                               error_msg="{compute_path_error_msg}"/>
+          </Fallback>
+          <ReactiveSequence>
+            <Fallback>
+                <IsPathValid path="{path}"
+                              max_cost="200"/>
+              <Sequence>
+                <CancelControl name="ControlCancel"/>
+                <Wait wait_duration="10.0"/>
+                <ComputePathToPose goal="{goal}"
+                                   planner_id="{selected_planner}"
+                                   path="{path}"
+                                   error_code_id="{compute_path_error_code}"
+                                   error_msg="{compute_path_error_msg}"/>
+              </Sequence>
+            </Fallback>
+            <RecoveryNode name="FollowPath"
+                          number_of_retries="1">
+              <FollowPath controller_id="{selected_controller}"
+                          path="{path}"
+                          error_code_id="{follow_path_error_code}"
+                          error_msg="{follow_path_error_msg}"/>
+              <ClearEntireCostmap name="ClearLocalCostmap-Context"
+                                  service_name="local_costmap/clear_entirely_local_costmap"/>
+            </RecoveryNode>
+          </ReactiveSequence>
+        </PipelineSequence>
+        <Wait wait_duration="1.0"/>
+      </RecoveryNode>
+    </PauseResumeController>
+  </BehaviorTree>
+
+
+</root>
