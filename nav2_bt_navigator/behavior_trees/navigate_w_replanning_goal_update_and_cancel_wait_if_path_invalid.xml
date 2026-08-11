@@ -25,8 +25,15 @@
           </Fallback>
           <ReactiveSequence>
             <Fallback>
+              <Sequence>
+                <Inverter>
+                  <IsPoseOccupied pose="{goal}"
+                      cost_threshold="230"
+                      use_footprint="true"/>
+                </Inverter>
                 <IsPathValid path="{path}"
                               max_cost="200"/>
+              </Sequence>
               <Sequence>
                 <CancelControl name="ControlCancel"/>
                 <Wait wait_duration="10.0"/>
