@@ -21,11 +21,15 @@
 #include <optional>
 #include <string>
 #include <vector>
+#include <map>
 
 #include "rclcpp/rclcpp.hpp"
+#include "geometry_msgs/msg/pose.hpp"
 #include "nav2_util/lifecycle_node.hpp"
 #include "nav2_util/node_utils.hpp"
 #include "nav2_util/simple_action_server.hpp"
+#include "nav2_util/service_server.hpp"
+#include "nav2_msgs/srv/save_dock_pose.hpp"
 #include "nav2_util/twist_publisher.hpp"
 #include "nav_2d_utils/odom_subscriber.hpp"
 #include "opennav_docking/controller.hpp"
@@ -117,6 +121,14 @@ public:
   bool resetApproach(const geometry_msgs::msg::PoseStamped & staging_pose, bool backward);
 
   /**
+   * @brief Control robot to an intermediate docking pose before final dock contact.
+   * @param pose The intermediate pose to approach.
+   * @param backward If true, the robot will drive backwards.
+   * @returns True if the pose is reached, False if cancelled/preempted.
+   */
+  bool approachPose(const geometry_msgs::msg::PoseStamped & pose, bool backward);
+
+  /**
    * @brief Run a single iteration of the control loop to approach a pose.
    * @param cmd The return command.
    * @param pose The pose to command towards.
@@ -136,6 +148,12 @@ public:
    * @returns Computed robot pose, throws TF2 error if failure.
    */
   virtual geometry_msgs::msg::PoseStamped getRobotPoseInFrame(const std::string & frame);
+
+  /**
+   * @brief Perform a pure rotation to after reached dock pose.
+   * @param dock_pose The target pose that will be used to rotate.
+   */
+  void rotateAfterReachedDock(const geometry_msgs::msg::PoseStamped & dock_pose, bool backward);
 
   /**
    * @brief Gets a preempted goal if immediately requested
@@ -231,6 +249,12 @@ protected:
   // Dynamic parameters handler
   rclcpp::node_interfaces::OnSetParametersCallbackHandle::SharedPtr dyn_params_handler_;
 
+  // Save dock pose callback
+  void saveDockPose(
+    const std::shared_ptr<rmw_request_id_t> request_header,
+    const std::shared_ptr<nav2_msgs::srv::SaveDockPose::Request> request,
+    std::shared_ptr<nav2_msgs::srv::SaveDockPose::Response> response);
+
   // Mutex for dynamic parameters and dock database
   std::shared_ptr<std::mutex> mutex_;
 
@@ -245,8 +269,16 @@ protected:
   double dock_approach_timeout_;
   // Timeout to rotate to the dock
   double rotate_to_dock_timeout_;
+  // Enable feature to rotate after reached dock
+  bool enable_rotate_after_reached_;
+  // Use staging dock pose
+  bool use_staging_dock_pose_;
+  // Timeout to rotate after reached dock
+  double rotate_after_reached_timeout_;
   // When undocking, these are the tolerances for arriving at the staging pose
   double undock_linear_tolerance_, undock_angular_tolerance_;
+  // When retrying, these are the tolerances for arriving at the staging pose
+  double retry_linear_tolerance_, retry_angular_tolerance_;
   // Maximum number of times the robot will return to staging pose and retry docking
   int max_retries_, num_retries_;
   // This is the root frame of the robot - typically "base_link"
@@ -259,6 +291,16 @@ protected:
   double dock_prestaging_tolerance_;
   // Angular tolerance to exit the rotation loop when rotate_to_dock is enabled
   double rotation_angular_tolerance_;
+  // Angular tolerance to exit the rotation loop when dock pose reached
+  double rotation_angular_after_reached_tolerance_;
+  // Offset from the refined dock pose to the intermediate staging dock pose
+  double staging_dock_pose_offset_;
+  // Non-detection x offset from dock pose
+  double non_detection_x_offset_;
+  // Non-detection y offset from dock pose
+  double non_detection_y_offset_;
+  // Dynamic saved dock poses
+  std::map<std::string, geometry_msgs::msg::Pose> dynamic_dock_poses_ = {};
 
   // This is a class member so it can be accessed in publish feedback
   rclcpp::Time action_start_time_;
@@ -267,6 +309,7 @@ protected:
   std::unique_ptr<nav_2d_utils::OdomSubscriber> odom_sub_;
   std::unique_ptr<DockingActionServer> docking_action_server_;
   std::unique_ptr<UndockingActionServer> undocking_action_server_;
+  nav2_util::ServiceServer<nav2_msgs::srv::SaveDockPose, std::shared_ptr<nav2_util::LifecycleNode>>::SharedPtr save_dock_pose_service_;
 
   std::unique_ptr<DockDatabase> dock_db_;
   std::unique_ptr<Navigator> navigator_;

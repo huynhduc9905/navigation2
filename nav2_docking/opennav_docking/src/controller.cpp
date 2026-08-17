@@ -13,6 +13,8 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+#include <algorithm>
+#include <cmath>
 #include <memory>
 
 #include "rclcpp/rclcpp.hpp"
@@ -48,6 +50,12 @@ Controller::Controller(
   nav2_util::declare_parameter_if_not_declared(
     node, "controller.v_angular_max", rclcpp::ParameterValue(0.75));
   nav2_util::declare_parameter_if_not_declared(
+    node, "controller.max_linear_accel", rclcpp::ParameterValue(1.0));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "controller.max_linear_decel", rclcpp::ParameterValue(1.0));
+  nav2_util::declare_parameter_if_not_declared(
+    node, "controller.max_angular_accel", rclcpp::ParameterValue(3.2));
+  nav2_util::declare_parameter_if_not_declared(
     node, "controller.slowdown_radius", rclcpp::ParameterValue(0.25));
   nav2_util::declare_parameter_if_not_declared(
       node, "controller.rotate_to_heading_angular_vel", rclcpp::ParameterValue(1.0));
@@ -77,6 +85,9 @@ Controller::Controller(
   node->get_parameter("controller.v_linear_min", v_linear_min_);
   node->get_parameter("controller.v_linear_max", v_linear_max_);
   node->get_parameter("controller.v_angular_max", v_angular_max_);
+  node->get_parameter("controller.max_linear_accel", max_linear_accel_);
+  node->get_parameter("controller.max_linear_decel", max_linear_decel_);
+  node->get_parameter("controller.max_angular_accel", max_angular_accel_);
   node->get_parameter("controller.slowdown_radius", slowdown_radius_);
   control_law_ = std::make_unique<nav2_graceful_controller::SmoothControlLaw>(
     k_phi_, k_delta_, beta_, lambda_, slowdown_radius_, v_linear_min_, v_linear_max_,
@@ -123,6 +134,30 @@ bool Controller::computeVelocityCommand(
   std::lock_guard<std::mutex> lock(dynamic_params_lock_);
   cmd = control_law_->calculateRegularVelocity(pose, backward);
   return isTrajectoryCollisionFree(pose, is_docking, backward);
+}
+
+geometry_msgs::msg::Twist Controller::limitVelocityCommand(
+  const geometry_msgs::msg::Twist & cmd,
+  const geometry_msgs::msg::Twist & previous_cmd,
+  const double & dt)
+{
+  std::lock_guard<std::mutex> lock(dynamic_params_lock_);
+  geometry_msgs::msg::Twist cmd_vel = cmd;
+  const double model_dt = std::max(0.0, dt);
+  const double max_delta_vx = model_dt * std::abs(max_linear_accel_);
+  const double max_delta_vx_decel = model_dt * std::abs(max_linear_decel_);
+  const double max_delta_wz = model_dt * std::abs(max_angular_accel_);
+
+  const double lower_bound_vx = previous_cmd.linear.x > 0.0 ? previous_cmd.linear.x - max_delta_vx_decel : previous_cmd.linear.x - max_delta_vx;
+  const double upper_bound_vx = previous_cmd.linear.x > 0.0 ? previous_cmd.linear.x + max_delta_vx : previous_cmd.linear.x + max_delta_vx_decel;
+
+  cmd_vel.linear.x = std::clamp(cmd.linear.x, lower_bound_vx, upper_bound_vx);
+  cmd_vel.angular.z = std::clamp(
+    cmd.angular.z,
+    previous_cmd.angular.z - max_delta_wz,
+    previous_cmd.angular.z + max_delta_wz);
+
+  return cmd_vel;
 }
 
 geometry_msgs::msg::Twist Controller::computeRotateToHeadingCommand(
@@ -261,6 +296,12 @@ Controller::dynamicParametersCallback(std::vector<rclcpp::Parameter> parameters)
         v_linear_max_ = parameter.as_double();
       } else if (param_name == "controller.v_angular_max") {
         v_angular_max_ = parameter.as_double();
+      } else if (param_name == "controller.max_linear_accel") {
+        max_linear_accel_ = parameter.as_double();
+      } else if (param_name == "controller.max_linear_decel") {
+        max_linear_decel_ = parameter.as_double();
+      } else if (param_name == "controller.max_angular_accel") {
+        max_angular_accel_ = parameter.as_double();
       } else if (param_name == "controller.slowdown_radius") {
         slowdown_radius_ = parameter.as_double();
       } else if (param_name == "controller.rotate_to_heading_angular_vel") {

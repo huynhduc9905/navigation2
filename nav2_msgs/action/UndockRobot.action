@@ -24,3 +24,8 @@ uint16 error_code 0  # Contextual error code, if any
 string error_msg
 ---
 #feedback definition
+uint16 NONE=0
+uint16 CONTROLLING=1
+
+uint16 state  # Current undocking state
+

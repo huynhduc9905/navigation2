@@ -322,6 +322,11 @@ void SimpleChargingDock::jointStateCallback(const sensor_msgs::msg::JointState::
   is_stalled_ = (velocity < stall_velocity_threshold_) && (effort > stall_effort_threshold_);
 }
 
+void SimpleChargingDock::setExternalDetectionEnabled(bool enabled)
+{
+  use_external_detection_pose_ = enabled;
+}
+
 }  // namespace opennav_docking
 
 #include "pluginlib/class_list_macros.hpp"

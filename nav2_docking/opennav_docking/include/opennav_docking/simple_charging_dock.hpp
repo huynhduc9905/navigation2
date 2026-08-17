@@ -103,6 +103,11 @@ public:
    */
   virtual bool hasStoppedCharging();
 
+  /**
+   * @copydoc opennav_docking_core::ChargingDock::setExternalDetectionEnabled
+   */
+  virtual void setExternalDetectionEnabled(bool enabled);
+
 protected:
   void jointStateCallback(const sensor_msgs::msg::JointState::SharedPtr state);
 
