@@ -37,6 +37,7 @@
               <Sequence>
                 <CancelControl name="ControlCancel"/>
                 <Wait wait_duration="10.0"/>
+                <ClearEntireCostmap name="ClearGlobalCostmap-Context" service_name="global_costmap/clear_entirely_global_costmap"/>
                 <ComputePathToPose goal="{goal}"
                                    planner_id="{selected_planner}"
                                    path="{path}"
