@@ -415,7 +415,6 @@ void DockingServer::dockRobot()
     }
 
     // Docking control loop: while not docked, run controller
-    rclcpp::Time dock_contact_time;
     while (rclcpp::ok()) {
       try {
         // Perform a 180º to face away from the dock if needed
@@ -467,6 +466,14 @@ void DockingServer::dockRobot()
       } catch (opennav_docking_core::DockingException & e) {
         if (++num_retries_ > max_retries_) {
           RCLCPP_ERROR(get_logger(), "Failed to dock, all retries have been used");
+          if (max_retries_ > 0) {
+            try {  // swallow new exceptions, so as to report original failure
+              resetApproach(staging_pose, dock_backward);
+            } catch (const std::exception & ex) {
+              RCLCPP_ERROR(
+                get_logger(), "Failed to return to staging pose: %s", ex.what());
+            }
+          }
           throw;
         }
         RCLCPP_WARN(get_logger(), "Docking failed, will retry: %s", e.what());
