@@ -131,9 +131,9 @@ protected:
   void process();
 
   /**
-   * @brief Polygons publishing routine. Made for visualization.
+   * @brief Publishes all visualization topics (polygons and exclusion zones).
    */
-  void publishPolygons() const;
+  void publishVisualizations() const;
 
   // ----- Variables -----
 

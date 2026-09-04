@@ -47,9 +47,11 @@ Scan::~Scan()
   data_sub_.reset();
 }
 
-void Scan::configure()
+bool Scan::configure()
 {
-  Source::configure();
+  if (!Source::configure()) {
+    return false;
+  }
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -64,9 +66,11 @@ void Scan::configure()
   data_sub_ = node->create_subscription<sensor_msgs::msg::LaserScan>(
     source_topic, scan_qos,
     std::bind(&Scan::dataCallback, this, std::placeholders::_1));
+
+  return true;
 }
 
-bool Scan::getData(
+bool Scan::getSourceData(
   const rclcpp::Time & curr_time,
   std::vector<Point> & data)
 {

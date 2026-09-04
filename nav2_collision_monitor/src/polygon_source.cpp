@@ -47,9 +47,11 @@ PolygonSource::~PolygonSource()
   data_sub_.reset();
 }
 
-void PolygonSource::configure()
+bool PolygonSource::configure()
 {
-  Source::configure();
+  if (!Source::configure()) {
+    return false;
+  }
   auto node = node_.lock();
   if (!node) {
     throw std::runtime_error{"Failed to lock node"};
@@ -63,9 +65,11 @@ void PolygonSource::configure()
   data_sub_ = node->create_subscription<geometry_msgs::msg::PolygonInstanceStamped>(
     source_topic, qos,
     std::bind(&PolygonSource::dataCallback, this, std::placeholders::_1));
+
+  return true;
 }
 
-bool PolygonSource::getData(
+bool PolygonSource::getSourceData(
   const rclcpp::Time & curr_time,
   std::vector<Point> & data)
 {

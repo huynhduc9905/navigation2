@@ -15,6 +15,7 @@ find_package(std_msgs REQUIRED)
 find_package(tf2 REQUIRED)
 find_package(tf2_ros REQUIRED)
 find_package(visualization_msgs REQUIRED)
+find_package(nav2_ros_common REQUIRED)
 
 nav2_package()
 
@@ -34,6 +35,7 @@ add_library(${monitor_library_name} SHARED
   src/polygon_source.cpp
   src/range.cpp
   src/kinematics.cpp
+  src/exclusion_zone.cpp
 )
 target_include_directories(${monitor_library_name}
   PUBLIC
@@ -51,6 +53,7 @@ target_link_libraries(${monitor_library_name} PUBLIC
   tf2::tf2
   tf2_ros::tf2_ros
   ${visualization_msgs_TARGETS}
+  nav2_ros_common::nav2_ros_common
 )
 target_link_libraries(${monitor_library_name} PRIVATE
   rclcpp_components::component
@@ -67,6 +70,7 @@ add_library(${detector_library_name} SHARED
   src/polygon_source.cpp
   src/range.cpp
   src/kinematics.cpp
+  src/exclusion_zone.cpp
 )
 target_include_directories(${detector_library_name}
   PUBLIC
@@ -84,6 +88,7 @@ target_link_libraries(${detector_library_name} PUBLIC
   tf2_ros::tf2_ros
   tf2::tf2
   ${visualization_msgs_TARGETS}
+  nav2_ros_common::nav2_ros_common
 )
 target_link_libraries(${detector_library_name} PRIVATE
   rclcpp_components::component
@@ -162,6 +167,7 @@ ament_export_dependencies(
   tf2
   tf2_ros
   visualization_msgs
+  nav2_ros_common
 )
 ament_export_targets(export_${PROJECT_NAME})
 
